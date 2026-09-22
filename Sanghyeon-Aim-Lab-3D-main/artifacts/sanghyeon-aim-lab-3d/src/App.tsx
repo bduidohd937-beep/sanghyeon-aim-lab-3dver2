@@ -277,14 +277,13 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       rightLeg.position.set(.16 * botScale, .43 * botScale, 0);
 
       root.add(head, neck, torso, shoulder, leftArm, rightArm, leftLeg, rightLeg);
-      root.position.set(0, 0, 0);
-
       if (drill === 'braking') {
-        // Wider randomized lanes/depth so the player must reacquire the head line.
+        // Keep the bot's head on a consistent VALORANT-style head line,
+        // while randomizing horizontal lane and distance.
         root.position.set(
-          (Math.random() - .5) * 9.5,
-          0,
-          -2.0 - Math.random() * 7.0
+          (Math.random() - .5) * 7.2,
+          brakingTargetY - 1.63 * botScale,
+          -4.5 - Math.random() * 7.5
         );
       } else {
         root.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
