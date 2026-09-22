@@ -259,9 +259,9 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         );
         sphere.name = 'head';
         sphere.position.set(
-          (Math.random() - .5) * 7.0,
-          1.35 + Math.random() * 3.0,
-          -4.8 - Math.random() * 4.5
+          (Math.random() - .5) * 5.0,
+          1.65 + Math.random() * 1.6,
+          -5.0 - Math.random() * 1.4
         );
         sphere.castShadow = true;
         root.add(sphere);
@@ -368,13 +368,13 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       if (drill === 'braking') {
         // Keep braking targets close and comfortably inside the player's FOV.
         root.position.set(
-          (Math.random() - .5) * 2.8,
-          2.25 - 1.70 * botScale,
-          -4.8 - Math.random() * 2.2
+          (Math.random() - .5) * 1.8,
+          .23 * botScale,
+          -5.0 - Math.random() * 1.0
         );
       } else {
         // Tracking starts in a readable central lane; the whole bot moves later.
-        root.position.set(0, 2.25 - 1.70 * botScale, -6.0);
+        root.position.set(0, .23 * botScale, -5.6);
       }
 
       root.traverse((object) => {
@@ -481,11 +481,11 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         if (drill === 'tracking' && targetRootRef.current) {
           // Tracking follows the bot's HEAD, but the whole humanoid moves together.
           const root = targetRootRef.current;
-          root.position.x = Math.sin(now * .00075) * 3.1;
-          root.position.y = (2.25 - 1.70 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94))
-            + Math.sin(now * .0011) * .38;
-          root.position.z = -6.2 + Math.sin(now * .00055) * 1.15;
-          root.rotation.y = Math.sin(now * .00065) * .10;
+          root.position.x = Math.sin(now * .00075) * 2.2;
+          root.position.y = .23 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94)
+            + Math.sin(now * .0011) * .18;
+          root.position.z = -5.8 + Math.sin(now * .00055) * .35;
+          root.rotation.y = 0;
         }
       }
       renderer.render(scene, camera);
