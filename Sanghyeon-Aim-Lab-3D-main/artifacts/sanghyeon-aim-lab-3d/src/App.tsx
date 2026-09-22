@@ -386,6 +386,9 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       brakingMovedRef.current = false;
     };
 
+    // Spawn the first target when the range opens. Without this, the scene starts empty.
+    spawn();
+
     const raycaster = new THREE.Raycaster();
     const keys = new Set<string>();
     const velocity = new THREE.Vector3();
