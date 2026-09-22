@@ -8,7 +8,7 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, X } from 'lucide-react';
 import * as THREE from 'three';
 
-type Drill = 'flick' | 'tracking';
+type Drill = 'flick' | 'tracking' | 'braking';
 type View = 'home' | 'range' | 'results';
 type RunStatus = 'active' | 'paused' | 'done';
 type Settings = { sensitivity: number; crosshair: number };
@@ -80,13 +80,16 @@ function Home({ settings, onSettings, onStart, history }: { settings: Settings; 
           <div className="eyebrow"><span className="eyebrow-line" /> 훈련 콘솔 / 3D 전환</div>
           <h1 className="hero-title">조준을<br /><em>정교하게.</em></h1>
           <p className="hero-copy">발로란트식 1인칭 사격장에서 조준 감각을 다듬으세요. 훈련을 고르고 시간을 정하면 실시간 기록이 바로 시작됩니다.</p>
-          <div className="drill-heading"><h2>훈련 선택</h2><span>01 — 02</span></div>
+          <div className="drill-heading"><h2>훈련 선택</h2><span>01 — 03</span></div>
           <div className="drill-grid">
             <button className={`drill-card ${drill === 'flick' ? 'selected' : ''}`} onClick={() => setDrill('flick')} data-testid="button-drill-flick">
               <Crosshair className="drill-icon" size={24} /><h3>플릭 / 순간 조준</h3><p>서로 다른 거리의 표적을 빠르게 전환하세요. 첫 발의 속도와 정확도를 측정합니다.</p>
             </button>
             <button className={`drill-card ${drill === 'tracking' ? 'selected' : ''}`} onClick={() => setDrill('tracking')} data-testid="button-drill-tracking">
               <Target className="drill-icon" size={24} /><h3>트래킹 / 추적 조준</h3><p>움직이는 표적을 조준선 안에 유지하세요. 안정적인 컨트롤을 훈련합니다.</p>
+            </button>
+            <button className={`drill-card ${drill === 'braking' ? 'selected' : ''}`} onClick={() => setDrill('braking')} data-testid="button-drill-braking">
+              <Gauge className="drill-icon" size={24} /><h3>브레이킹 / 감속 조준</h3><p>빠르게 이동한 표적이 감속해 멈추는 순간 정확하게 첫 발을 꽂습니다.</p>
             </button>
           </div>
           <div className="setup-row">
@@ -104,7 +107,7 @@ function Home({ settings, onSettings, onStart, history }: { settings: Settings; 
           <div className="stat-list"><div className="stat-row"><span>훈련 횟수</span><strong data-testid="text-runs-logged">{history.length.toString().padStart(2, '0')}</strong></div><div className="stat-row"><span>최근 명중률</span><strong data-testid="text-last-accuracy">{history.length ? `${lastAccuracy.toFixed(1)}%` : '—'}</strong></div><div className="stat-row"><span>현재 감도</span><strong>{settings.sensitivity.toFixed(2)}</strong></div></div>
           <div className="side-rule" />
           <div className="history-title">최근 훈련</div>
-          {history.length === 0 ? <div className="history-row"><small>아직 기록이 없습니다</small><strong>—</strong></div> : history.slice(0, 4).map((item, index) => <div className="history-row" key={`${item.date}-${index}`} data-testid={`row-history-${index}`}><div><strong>{item.score.toLocaleString()}</strong><small style={{ display: 'block', marginTop: 4 }}>{item.drill === 'flick' ? '플릭' : '트래킹'} / {item.date}</small></div><em>{item.accuracy.toFixed(1)}%</em></div>)}
+          {history.length === 0 ? <div className="history-row"><small>아직 기록이 없습니다</small><strong>—</strong></div> : history.slice(0, 4).map((item, index) => <div className="history-row" key={`${item.date}-${index}`} data-testid={`row-history-${index}`}><div><strong>{item.score.toLocaleString()}</strong><small style={{ display: 'block', marginTop: 4 }}>{item.drill === 'flick' ? '플릭' : item.drill === 'tracking' ? '트래킹' : '브레이킹'} / {item.date}</small></div><em>{item.accuracy.toFixed(1)}%</em></div>)}
         </aside>
       </div>
     </div>
@@ -158,13 +161,23 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
     const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
     const group = new THREE.Group(); scene.add(group);
+    let brakingElapsed = 0;
+    let brakingDirection = Math.random() < 0.5 ? 1 : -1;
+    const brakingDuration = 0.9;
+    const brakingStartX = () => (brakingDirection > 0 ? -4.6 : 4.6);
     const spawn = () => {
       if (targetMeshRef.current) group.remove(targetMeshRef.current);
       const geometry = new THREE.CylinderGeometry(difficultySize, difficultySize, .12, 32);
       const material = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
       const target = new THREE.Mesh(geometry, material);
       target.rotation.x = Math.PI / 2;
-      target.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
+      if (drill === 'braking') {
+        brakingElapsed = 0;
+        brakingDirection = Math.random() < 0.5 ? 1 : -1;
+        target.position.set(brakingStartX(), 1.45 + Math.random() * 3.1, -1.8 - Math.random() * 4.1);
+      } else {
+        target.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
+      }
       target.castShadow = true;
       group.add(target); targetMeshRef.current = target;
     };
@@ -186,8 +199,19 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
       const hit = targetMeshRef.current ? raycaster.intersectObject(targetMeshRef.current).length > 0 : false;
       const next = { ...statsRef.current, shots: statsRef.current.shots + 1 };
-      if (hit) { next.hits += 1; next.streak += 1; const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1)); next.score += points; setFeedback({ text: `명중 +${points}`, miss: false, id: Date.now() }); spawn(); }
-      else { next.streak = 0; next.score = Math.max(0, next.score - 20); setFeedback({ text: '빗나감 -20', miss: true, id: Date.now() }); }
+      if (hit) {
+        next.hits += 1;
+        next.streak += 1;
+        const brakingBonus = drill === 'braking' && brakingElapsed >= brakingDuration && brakingElapsed <= brakingDuration + .55 ? 1.25 : 1;
+        const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * brakingBonus * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1));
+        next.score += points;
+        setFeedback({ text: `명중 +${points}`, miss: false, id: Date.now() });
+        spawn();
+      } else {
+        next.streak = 0;
+        next.score = Math.max(0, next.score - 20);
+        setFeedback({ text: '빗나감 -20', miss: true, id: Date.now() });
+      }
       next.accuracy = next.shots ? next.hits / next.shots * 100 : 0; statsRef.current = next; setStats({ ...next });
     };
     const onKeyDown = (event: KeyboardEvent) => {
@@ -218,7 +242,37 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
     window.addEventListener('resize', resize);
     let frame = 0; let previous = performance.now();
-    const animate = (now: number) => { frame = requestAnimationFrame(animate); const delta = (now - previous) / 1000; previous = now; if (statusRef.current === 'active') { applyMovement(delta); if (drill === 'tracking' && targetMeshRef.current) { const target = targetMeshRef.current; target.position.x += Math.sin(now * .0012) * delta * .8; target.position.y += Math.cos(now * .001) * delta * .45; } } renderer.render(scene, camera); };
+    const animate = (now: number) => {
+      frame = requestAnimationFrame(animate);
+      const delta = Math.min((now - previous) / 1000, .05);
+      previous = now;
+      if (statusRef.current === 'active') {
+        applyMovement(delta);
+        if (drill === 'tracking' && targetMeshRef.current) {
+          const target = targetMeshRef.current;
+          target.position.x += Math.sin(now * .0012) * delta * .8;
+          target.position.y += Math.cos(now * .001) * delta * .45;
+          target.position.x = THREE.MathUtils.clamp(target.position.x, -4.8, 4.8);
+          target.position.y = THREE.MathUtils.clamp(target.position.y, .8, 5.1);
+        }
+        if (drill === 'braking' && targetMeshRef.current) {
+          const target = targetMeshRef.current;
+          brakingElapsed += delta;
+          const t = Math.min(brakingElapsed / brakingDuration, 1);
+          // Fast entry followed by a strong deceleration into a short stop window.
+          const eased = 1 - Math.pow(1 - t, 3);
+          target.position.x = brakingStartX() + brakingDirection * 8.8 * eased;
+          if (t >= 1) {
+            // Hold briefly, then restart the same drill cycle from the opposite side.
+            if (brakingElapsed >= brakingDuration + .55) {
+              brakingDirection *= -1;
+              brakingElapsed = 0;
+            }
+          }
+        }
+      }
+      renderer.render(scene, camera);
+    };
     frame = requestAnimationFrame(animate);
     return () => { cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
   }, [difficulty, drill, finish, difficultySize]);
@@ -246,7 +300,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     <div className="range-screen">
       <div ref={mountRef} className="range-canvas-wrap" data-testid="canvas-3d-range" />
       <div className="range-hud">
-         <div className="hud-top"><div className="hud-brand"><b>사격장 01</b> / {drill === 'flick' ? '순간 조준' : '추적 조준'} / 진행 중</div><div className="hud-actions"><button className="hud-button" onClick={() => setSettingsOpen(true)} aria-label="훈련 설정 열기" data-testid="button-range-settings"><Settings2 size={16} /></button><button className="hud-button" onClick={togglePause} aria-label={status === 'paused' ? '훈련 재개' : '훈련 일시정지'} data-testid="button-pause-run">{status === 'paused' ? <Play size={16} /> : <Pause size={16} />}</button><button className="hud-button" onClick={exit} aria-label="훈련 종료" data-testid="button-exit-run"><X size={17} /></button></div></div>
+         <div className="hud-top"><div className="hud-brand"><b>사격장 01</b> / {drill === 'flick' ? '순간 조준' : drill === 'tracking' ? '추적 조준' : '브레이킹'} / 진행 중</div><div className="hud-actions"><button className="hud-button" onClick={() => setSettingsOpen(true)} aria-label="훈련 설정 열기" data-testid="button-range-settings"><Settings2 size={16} /></button><button className="hud-button" onClick={togglePause} aria-label={status === 'paused' ? '훈련 재개' : '훈련 일시정지'} data-testid="button-pause-run">{status === 'paused' ? <Play size={16} /> : <Pause size={16} />}</button><button className="hud-button" onClick={exit} aria-label="훈련 종료" data-testid="button-exit-run"><X size={17} /></button></div></div>
          <div className="hud-metrics"><div className="hud-stat accent"><label>점수</label><strong data-testid="telemetry-score">{stats.score.toString().padStart(4, '0')}</strong></div><div className="hud-stat"><label>명중률</label><strong data-testid="telemetry-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="hud-stat"><label>연속 명중</label><strong data-testid="telemetry-streak">{stats.streak.toString().padStart(2, '0')}</strong></div></div>
          <div className={`hud-time ${timeLeft < 5 ? 'low' : ''}`}><label>남은 시간</label><strong data-testid="telemetry-time">{timeLeft.toFixed(1)}초</strong></div>
         <div className="crosshair" style={{ width: settings.crosshair, height: settings.crosshair }}><i /></div>
@@ -262,7 +316,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
 
 function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
   return (
-    <div className="aim-app results-screen"><div className="results-shell"><div className="results-top"><Brand /><div className="results-kicker">훈련 결과 / 01</div></div><div className="results-kicker">{stats.drill === 'flick' ? '순간 조준' : '추적 조준'} 훈련 완료</div><h1 className="results-title">기록이<br /><span>저장되었습니다.</span></h1><p className="results-sub">결과를 확인하고 다음 훈련에서 더 정교하게 조준해보세요.</p><div className="results-grid"><div className="result-score"><label>최종 점수</label><strong data-testid="results-score">{stats.score.toLocaleString()}</strong><small>{stats.hits}회 명중 / {stats.shots}회 사격</small></div><div className="result-metrics"><div className="result-metric"><label>명중률</label><strong data-testid="results-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="result-metric"><label>최고 연속</label><strong data-testid="results-streak">{stats.streak.toString().padStart(2, '0')}</strong></div><div className="result-metric"><label>훈련 시간</label><strong>{stats.duration}초</strong></div><div className="result-metric"><label>프로토콜</label><strong>{stats.drill === 'flick' ? '플릭' : '트래킹'}</strong></div></div></div><div className="result-actions"><button className="start-button" onClick={onAgain} data-testid="button-run-again"><RotateCcw size={15} /> 다시 훈련</button><button className="secondary-button" onClick={onHome} data-testid="button-return-home">훈련 선택으로</button></div><footer className="results-footer"><span>기록은 이 브라우저에 자동 저장됩니다</span><span>Sanghyeon / 3D 에임랩</span></footer></div></div>
+    <div className="aim-app results-screen"><div className="results-shell"><div className="results-top"><Brand /><div className="results-kicker">훈련 결과 / 01</div></div><div className="results-kicker">{stats.drill === 'flick' ? '순간 조준' : stats.drill === 'tracking' ? '추적 조준' : '브레이킹'} 훈련 완료</div><h1 className="results-title">기록이<br /><span>저장되었습니다.</span></h1><p className="results-sub">결과를 확인하고 다음 훈련에서 더 정교하게 조준해보세요.</p><div className="results-grid"><div className="result-score"><label>최종 점수</label><strong data-testid="results-score">{stats.score.toLocaleString()}</strong><small>{stats.hits}회 명중 / {stats.shots}회 사격</small></div><div className="result-metrics"><div className="result-metric"><label>명중률</label><strong data-testid="results-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="result-metric"><label>최고 연속</label><strong data-testid="results-streak">{stats.streak.toString().padStart(2, '0')}</strong></div><div className="result-metric"><label>훈련 시간</label><strong>{stats.duration}초</strong></div><div className="result-metric"><label>프로토콜</label><strong>{stats.drill === 'flick' ? '플릭' : stats.drill === 'tracking' ? '트래킹' : '브레이킹'}</strong></div></div></div><div className="result-actions"><button className="start-button" onClick={onAgain} data-testid="button-run-again"><RotateCcw size={15} /> 다시 훈련</button><button className="secondary-button" onClick={onHome} data-testid="button-return-home">훈련 선택으로</button></div><footer className="results-footer"><span>기록은 이 브라우저에 자동 저장됩니다</span><span>Sanghyeon / 3D 에임랩</span></footer></div></div>
   );
 }
 
