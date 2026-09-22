@@ -197,6 +197,11 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     camera.add(weapon);
     scene.add(camera);
 
+    let recoilKick = 0;
+    let recoilRoll = 0;
+    const baseWeaponZ = weapon.position.z;
+    const baseWeaponY = weapon.position.y;
+
     const muzzleFlash = new THREE.Mesh(
       new THREE.SphereGeometry(.065, 8, 8),
       new THREE.MeshBasicMaterial({ color: '#fff2a3', transparent: true, opacity: 0 })
@@ -220,6 +225,8 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
 
     const fireVisual = (end: THREE.Vector3) => {
       muzzleFlash.material.opacity = 1;
+      recoilKick = Math.min(.075, recoilKick + .045);
+      recoilRoll += (Math.random() - .5) * .045;
       window.setTimeout(() => { muzzleFlash.material.opacity = 0; }, 45);
       createTracer(end);
     };
@@ -230,29 +237,67 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     const spawn = () => {
       if (targetRootRef.current) group.remove(targetRootRef.current);
       const root = new THREE.Group();
-      const bodyRadius = difficultySize * 1.25;
-      const bodyHeight = difficultySize * 2.5;
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#a9b4b8', emissive: '#243238', emissiveIntensity: .35, metalness: .18, roughness: .58 });
-      const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyRadius, bodyHeight, 6, 16), bodyMaterial);
-      body.position.y = -difficultySize * 1.25;
-      body.castShadow = true;
-      body.name = 'body';
+
+      const botScale = difficulty === 'trainee' ? 1.18 : difficulty === 'elite' ? .78 : .96;
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#6f7b80', emissive: '#1d272b', emissiveIntensity: .3, metalness: .2, roughness: .6 });
       const headMaterial = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
-      const head = new THREE.Mesh(new THREE.SphereGeometry(difficultySize, 24, 16), headMaterial);
+      const accentMaterial = new THREE.MeshStandardMaterial({ color: '#222b2f', roughness: .65, metalness: .25 });
+
+      // Generic humanoid range bot: head / neck / torso / shoulders / arms / legs.
+      const head = new THREE.Mesh(new THREE.SphereGeometry(.23 * botScale, 20, 14), headMaterial);
       head.name = 'head';
-      head.castShadow = true;
-      root.add(body, head);
+      head.position.y = 1.63 * botScale;
+
+      const neck = new THREE.Mesh(new THREE.CylinderGeometry(.075 * botScale, .085 * botScale, .14 * botScale, 12), accentMaterial);
+      neck.position.y = 1.40 * botScale;
+
+      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.32 * botScale, .58 * botScale, 6, 12), bodyMaterial);
+      torso.name = 'body';
+      torso.position.y = .99 * botScale;
+
+      const shoulder = new THREE.Mesh(new THREE.BoxGeometry(.92 * botScale, .22 * botScale, .34 * botScale), bodyMaterial);
+      shoulder.position.y = 1.20 * botScale;
+
+      const armGeo = new THREE.CapsuleGeometry(.10 * botScale, .42 * botScale, 5, 10);
+      const leftArm = new THREE.Mesh(armGeo, bodyMaterial);
+      const rightArm = new THREE.Mesh(armGeo, bodyMaterial);
+      leftArm.name = 'body';
+      rightArm.name = 'body';
+      leftArm.position.set(-.48 * botScale, .94 * botScale, 0);
+      rightArm.position.set(.48 * botScale, .94 * botScale, 0);
+      leftArm.rotation.z = -.08;
+      rightArm.rotation.z = .08;
+
+      const legGeo = new THREE.CapsuleGeometry(.115 * botScale, .48 * botScale, 5, 10);
+      const leftLeg = new THREE.Mesh(legGeo, accentMaterial);
+      const rightLeg = new THREE.Mesh(legGeo, accentMaterial);
+      leftLeg.name = 'body';
+      rightLeg.name = 'body';
+      leftLeg.position.set(-.16 * botScale, .43 * botScale, 0);
+      rightLeg.position.set(.16 * botScale, .43 * botScale, 0);
+
+      root.add(head, neck, torso, shoulder, leftArm, rightArm, leftLeg, rightLeg);
+      root.position.set(0, 0, 0);
+
       if (drill === 'braking') {
-        root.position.set((Math.random() - .5) * 2.6, brakingTargetY, brakingTargetZ);
+        // Wider randomized lanes/depth so the player must reacquire the head line.
+        root.position.set(
+          (Math.random() - .5) * 9.5,
+          0,
+          -2.0 - Math.random() * 7.0
+        );
       } else {
         root.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
       }
+
+      root.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.castShadow = true;
+      });
       group.add(root);
       targetRootRef.current = root;
       targetMeshRef.current = head;
       brakingMovedRef.current = false;
-    };
-    spawn();
+    };    spawn();
     const raycaster = new THREE.Raycaster();
     const keys = new Set<string>();
     const velocity = new THREE.Vector3();
@@ -274,8 +319,9 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       const next = { ...statsRef.current, shots: statsRef.current.shots + 1 };
       const brakingMoving = drill === 'braking' && velocity.length() > brakingStopThreshold;
       const brakingNoMovement = drill === 'braking' && !brakingMovedRef.current;
-      const targetPoint = targetRootRef.current ? targetRootRef.current.getWorldPosition(new THREE.Vector3()) : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
-      const tracerEnd = targetPoint.clone().add(new THREE.Vector3((Math.random() - .5) * .03, (Math.random() - .5) * .03, (Math.random() - .5) * .03));
+      const shotDirection = new THREE.Vector3();
+      camera.getWorldDirection(shotDirection);
+      const tracerEnd = camera.position.clone().addScaledVector(shotDirection, 30);
       fireVisual(tracerEnd);
       if (drill === 'braking' && brakingNoMovement) {
         next.streak = 0;
@@ -335,6 +381,12 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       previous = now;
       if (statusRef.current === 'active') {
         applyMovement(delta);
+        recoilKick = THREE.MathUtils.damp(recoilKick, 0, 14, delta);
+        recoilRoll = THREE.MathUtils.damp(recoilRoll, 0, 12, delta);
+        weapon.position.z = baseWeaponZ + recoilKick;
+        weapon.position.y = baseWeaponY + recoilKick * .32;
+        weapon.rotation.x = -.03 + recoilKick * 1.7;
+        weapon.rotation.z = -.02 + recoilRoll;
         if (drill === 'tracking' && targetMeshRef.current) {
           const target = targetMeshRef.current;
           target.position.x += Math.sin(now * .0012) * delta * .8;
