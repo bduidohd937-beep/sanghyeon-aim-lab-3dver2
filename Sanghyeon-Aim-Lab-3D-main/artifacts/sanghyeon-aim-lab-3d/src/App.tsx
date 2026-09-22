@@ -366,11 +366,12 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       );
 
       if (drill === 'braking') {
-        // Keep braking targets close and comfortably inside the player's FOV.
+        // Braking targets use a wider Valorant-like lane so the player has to
+        // actually move left/right before stopping and taking the shot.
         root.position.set(
-          (Math.random() - .5) * 1.8,
+          (Math.random() - .5) * 6.8,
           .23 * botScale,
-          -5.0 - Math.random() * 1.0
+          -4.8 - Math.random() * 1.5
         );
       } else {
         // Tracking starts in a readable central lane; the whole bot moves later.
@@ -465,6 +466,11 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     renderer.domElement.addEventListener('pointermove', onPointerMove); renderer.domElement.addEventListener('click', onCanvasClick); document.addEventListener('pointerlockchange', onPointerLockChange); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('blur', onBlur);
     const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
     window.addEventListener('resize', resize);
+    const trackingState = {
+      direction: Math.random() < .5 ? -1 : 1,
+      velocity: 0,
+      timer: .35 + Math.random() * .45,
+    };
     let frame = 0; let previous = performance.now();
     const animate = (now: number) => {
       frame = requestAnimationFrame(animate);
@@ -479,13 +485,38 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         weapon.rotation.x = -.03 + recoilKick * 1.7;
         weapon.rotation.z = -.02 + recoilRoll;
         if (drill === 'tracking' && targetRootRef.current) {
-          // Tracking follows the bot's HEAD, but the whole humanoid moves together.
+          // Valorant-style strafing: the bot stays grounded and moves in
+          // unpredictable left/right bursts instead of floating in an orbit.
           const root = targetRootRef.current;
-          root.position.x = Math.sin(now * .00075) * 2.2;
-          root.position.y = .23 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94)
-            + Math.sin(now * .0011) * .18;
-          root.position.z = -5.8 + Math.sin(now * .00055) * .35;
+          const maxX = difficulty === 'elite' ? 3.15 : difficulty === 'trainee' ? 3.9 : 3.55;
+          const tracking = trackingState;
+
+          // Pick a new strafe direction after each segment. Same-direction
+          // repeats are intentionally possible (e.g. L-L-L-R-R-L).
+          if (tracking.timer <= 0) {
+            const atLeft = root.position.x <= -maxX + .08;
+            const atRight = root.position.x >= maxX - .08;
+            if (atLeft) tracking.direction = 1;
+            else if (atRight) tracking.direction = -1;
+            else if (Math.random() < .38) tracking.direction *= -1;
+            else tracking.direction = Math.random() < .5 ? -1 : 1;
+
+            tracking.timer = .42 + Math.random() * .62;
+          }
+
+          const distanceToEdge = maxX - Math.abs(root.position.x);
+          const edgeSlowdown = THREE.MathUtils.clamp(distanceToEdge / .8, .22, 1);
+          const targetSpeed = (difficulty === 'elite' ? 2.7 : 3.05) * edgeSlowdown;
+          const accel = 10.5;
+          tracking.velocity = THREE.MathUtils.damp(tracking.velocity, tracking.direction * targetSpeed, accel, delta);
+
+          root.position.x += tracking.velocity * delta;
+          root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
+          root.position.y = .23 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94);
+          root.position.z = -5.75;
           root.rotation.y = 0;
+
+          tracking.timer -= delta;
         }
       }
       renderer.render(scene, camera);
