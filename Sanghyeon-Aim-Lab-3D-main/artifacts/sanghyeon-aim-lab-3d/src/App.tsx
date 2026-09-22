@@ -369,7 +369,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         // Braking targets use a wider Valorant-like lane so the player has to
         // actually move left/right before stopping and taking the shot.
         root.position.set(
-          (Math.random() - .5) * 6.8,
+          (Math.random() - .5) * 8.0,
           .23 * botScale,
           -4.8 - Math.random() * 1.5
         );
