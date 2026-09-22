@@ -238,116 +238,143 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       if (targetRootRef.current) group.remove(targetRootRef.current);
       const root = new THREE.Group();
 
-      const botScale = difficulty === 'trainee' ? 1.18 : difficulty === 'elite' ? .78 : .96;
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#6f7b80', emissive: '#1d272b', emissiveIntensity: .3, metalness: .2, roughness: .6 });
-      const headMaterial = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
-      const accentMaterial = new THREE.MeshStandardMaterial({ color: '#222b2f', roughness: .65, metalness: .25 });
+      const botScale = difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94;
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: '#667277', emissive: '#182125', emissiveIntensity: .22,
+        metalness: .15, roughness: .72
+      });
+      const headMaterial = new THREE.MeshStandardMaterial({
+        color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.15,
+        metalness: .08, roughness: .4
+      });
+      const accentMaterial = new THREE.MeshStandardMaterial({
+        color: '#20292d', roughness: .72, metalness: .18
+      });
 
-      // Low-poly humanoid training bot: every body region is a separate mesh
-      // so the silhouette reads clearly and hit detection can stay anatomical.
+      if (drill === 'flick') {
+        // Flick is deliberately a clean spherical target, not a humanoid.
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(.30 * botScale, 24, 18),
+          headMaterial
+        );
+        sphere.name = 'head';
+        sphere.position.set(
+          (Math.random() - .5) * 7.0,
+          1.35 + Math.random() * 3.0,
+          -4.8 - Math.random() * 4.5
+        );
+        sphere.castShadow = true;
+        root.add(sphere);
+        group.add(root);
+        targetRootRef.current = root;
+        targetMeshRef.current = sphere;
+        brakingMovedRef.current = false;
+        return;
+      }
+
+      // Clean, thin humanoid range bot. No bulky front/back protrusions.
       const head = new THREE.Mesh(
-        new THREE.SphereGeometry(.235 * botScale, 20, 14),
-        headMaterial
+        new THREE.SphereGeometry(.235 * botScale, 20, 14), headMaterial
       );
       head.name = 'head';
-      head.position.y = 1.63 * botScale;
+      head.position.y = 1.70 * botScale;
 
       const neck = new THREE.Mesh(
-        new THREE.CylinderGeometry(.078 * botScale, .092 * botScale, .15 * botScale, 12),
+        new THREE.CylinderGeometry(.07 * botScale, .075 * botScale, .15 * botScale, 12),
         accentMaterial
       );
       neck.name = 'body';
-      neck.position.y = 1.40 * botScale;
+      neck.position.y = 1.48 * botScale;
 
-      // Broad shoulders flowing into a narrower waist: a human-like inverted-triangle torso.
+      // Thin rectangular torso with a subtle shoulder taper, facing the player.
       const torso = new THREE.Mesh(
-        new THREE.CylinderGeometry(.40 * botScale, .255 * botScale, .62 * botScale, 4),
+        new THREE.BoxGeometry(.46 * botScale, .62 * botScale, .18 * botScale),
         bodyMaterial
       );
       torso.name = 'body';
-      torso.rotation.y = Math.PI / 4;
-      torso.position.y = 1.08 * botScale;
+      torso.position.y = 1.16 * botScale;
 
-      const shoulderBar = new THREE.Mesh(
-        new THREE.CylinderGeometry(.50 * botScale, .43 * botScale, .16 * botScale, 8),
+      const shoulder = new THREE.Mesh(
+        new THREE.BoxGeometry(.72 * botScale, .16 * botScale, .20 * botScale),
         bodyMaterial
       );
-      shoulderBar.name = 'body';
-      shoulderBar.rotation.z = Math.PI / 2;
-      shoulderBar.position.y = 1.31 * botScale;
+      shoulder.name = 'body';
+      shoulder.position.y = 1.39 * botScale;
 
       const waist = new THREE.Mesh(
-        new THREE.CylinderGeometry(.19 * botScale, .22 * botScale, .18 * botScale, 8),
+        new THREE.BoxGeometry(.28 * botScale, .16 * botScale, .16 * botScale),
         accentMaterial
       );
       waist.name = 'body';
-      waist.position.y = .75 * botScale;
+      waist.position.y = .82 * botScale;
 
-      // Separate pelvis gives the bot the requested V/triangle transition below the waist.
       const pelvis = new THREE.Mesh(
-        new THREE.CylinderGeometry(.31 * botScale, .22 * botScale, .30 * botScale, 4),
+        new THREE.BoxGeometry(.40 * botScale, .26 * botScale, .20 * botScale),
         bodyMaterial
       );
       pelvis.name = 'body';
-      pelvis.rotation.y = Math.PI / 4;
-      pelvis.position.y = .56 * botScale;
+      pelvis.position.y = .63 * botScale;
 
-      const upperArmGeo = new THREE.CapsuleGeometry(.095 * botScale, .34 * botScale, 5, 10);
-      const forearmGeo = new THREE.CapsuleGeometry(.082 * botScale, .30 * botScale, 5, 10);
+      // Relaxed arms: upper arms hang slightly outward, forearms angle inward.
+      const upperArmGeo = new THREE.CapsuleGeometry(.085 * botScale, .30 * botScale, 5, 10);
+      const forearmGeo = new THREE.CapsuleGeometry(.075 * botScale, .27 * botScale, 5, 10);
       const leftUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
       const rightUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
       const leftForearm = new THREE.Mesh(forearmGeo, accentMaterial);
       const rightForearm = new THREE.Mesh(forearmGeo, accentMaterial);
       [leftUpperArm, rightUpperArm, leftForearm, rightForearm].forEach((part) => { part.name = 'body'; });
-      leftUpperArm.position.set(-.51 * botScale, 1.10 * botScale, 0);
-      rightUpperArm.position.set(.51 * botScale, 1.10 * botScale, 0);
-      leftUpperArm.rotation.z = -.10;
-      rightUpperArm.rotation.z = .10;
-      leftForearm.position.set(-.56 * botScale, .82 * botScale, 0);
-      rightForearm.position.set(.56 * botScale, .82 * botScale, 0);
-      leftForearm.rotation.z = -.06;
-      rightForearm.rotation.z = .06;
 
-      const thighGeo = new THREE.CapsuleGeometry(.13 * botScale, .42 * botScale, 5, 10);
-      const shinGeo = new THREE.CapsuleGeometry(.105 * botScale, .38 * botScale, 5, 10);
+      leftUpperArm.position.set(-.43 * botScale, 1.17 * botScale, 0);
+      rightUpperArm.position.set(.43 * botScale, 1.17 * botScale, 0);
+      leftUpperArm.rotation.z = -.18;
+      rightUpperArm.rotation.z = .18;
+
+      leftForearm.position.set(-.49 * botScale, .91 * botScale, -.015 * botScale);
+      rightForearm.position.set(.49 * botScale, .91 * botScale, -.015 * botScale);
+      leftForearm.rotation.z = -.10;
+      rightForearm.rotation.z = .10;
+
+      // Slightly separated legs give a stable, natural standing pose.
+      const thighGeo = new THREE.CapsuleGeometry(.105 * botScale, .38 * botScale, 5, 10);
+      const shinGeo = new THREE.CapsuleGeometry(.09 * botScale, .34 * botScale, 5, 10);
       const leftThigh = new THREE.Mesh(thighGeo, bodyMaterial);
       const rightThigh = new THREE.Mesh(thighGeo, bodyMaterial);
       const leftShin = new THREE.Mesh(shinGeo, accentMaterial);
       const rightShin = new THREE.Mesh(shinGeo, accentMaterial);
       [leftThigh, rightThigh, leftShin, rightShin].forEach((part) => { part.name = 'body'; });
-      leftThigh.position.set(-.15 * botScale, .30 * botScale, 0);
-      rightThigh.position.set(.15 * botScale, .30 * botScale, 0);
-      leftShin.position.set(-.15 * botScale, -.04 * botScale, 0);
-      rightShin.position.set(.15 * botScale, -.04 * botScale, 0);
+
+      leftThigh.position.set(-.13 * botScale, .39 * botScale, 0);
+      rightThigh.position.set(.13 * botScale, .39 * botScale, 0);
+      leftShin.position.set(-.13 * botScale, .06 * botScale, 0);
+      rightShin.position.set(.13 * botScale, .06 * botScale, 0);
 
       const leftFoot = new THREE.Mesh(
-        new THREE.BoxGeometry(.18 * botScale, .10 * botScale, .30 * botScale),
-        accentMaterial
+        new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
       );
       const rightFoot = new THREE.Mesh(
-        new THREE.BoxGeometry(.18 * botScale, .10 * botScale, .30 * botScale),
-        accentMaterial
+        new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
       );
       leftFoot.name = 'body';
       rightFoot.name = 'body';
-      leftFoot.position.set(-.15 * botScale, -.30 * botScale, -.07 * botScale);
-      rightFoot.position.set(.15 * botScale, -.30 * botScale, -.07 * botScale);
+      leftFoot.position.set(-.13 * botScale, -.23 * botScale, -.055 * botScale);
+      rightFoot.position.set(.13 * botScale, -.23 * botScale, -.055 * botScale);
 
       root.add(
-        head, neck, shoulderBar, torso, waist, pelvis,
+        head, neck, shoulder, torso, waist, pelvis,
         leftUpperArm, rightUpperArm, leftForearm, rightForearm,
         leftThigh, rightThigh, leftShin, rightShin, leftFoot, rightFoot
       );
+
       if (drill === 'braking') {
-        // Keep the bot's head on a consistent VALORANT-style head line,
-        // while randomizing horizontal lane and distance.
+        // Keep braking targets close and comfortably inside the player's FOV.
         root.position.set(
-          (Math.random() - .5) * 7.2,
-          brakingTargetY - 1.63 * botScale,
-          -4.5 - Math.random() * 7.5
+          (Math.random() - .5) * 2.8,
+          2.25 - 1.70 * botScale,
+          -4.8 - Math.random() * 2.2
         );
       } else {
-        root.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
+        // Tracking starts in a readable central lane; the whole bot moves later.
+        root.position.set(0, 2.25 - 1.70 * botScale, -6.0);
       }
 
       root.traverse((object) => {
@@ -357,7 +384,8 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       targetRootRef.current = root;
       targetMeshRef.current = head;
       brakingMovedRef.current = false;
-    };    spawn();
+    };
+
     const raycaster = new THREE.Raycaster();
     const keys = new Set<string>();
     const velocity = new THREE.Vector3();
