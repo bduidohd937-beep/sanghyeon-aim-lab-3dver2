@@ -126,6 +126,8 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pointerLocked, setPointerLocked] = useState(false);
   const targetMeshRef = useRef<THREE.Mesh | null>(null);
+  const targetRootRef = useRef<THREE.Group | null>(null);
+  const brakingMovedRef = useRef(false);
   const sensitivityRef = useRef(settings.sensitivity);
   const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'elite' ? 0.31 : 0.42;
   const finish = useCallback(() => {
@@ -222,28 +224,33 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       createTracer(end);
     };
 
-    let brakingElapsed = 0;
-    let brakingDirection = 0;
-    let brakingCycles = 0;
     const brakingStopThreshold = .16;
     const brakingTargetY = 2.25;
     const brakingTargetZ = -4.2;
     const spawn = () => {
-      if (targetMeshRef.current) group.remove(targetMeshRef.current);
-      const geometry = new THREE.CylinderGeometry(difficultySize, difficultySize, .12, 32);
-      const material = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
-      const target = new THREE.Mesh(geometry, material);
-      target.rotation.x = Math.PI / 2;
+      if (targetRootRef.current) group.remove(targetRootRef.current);
+      const root = new THREE.Group();
+      const bodyRadius = difficultySize * 1.25;
+      const bodyHeight = difficultySize * 2.5;
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: '#a9b4b8', emissive: '#243238', emissiveIntensity: .35, metalness: .18, roughness: .58 });
+      const body = new THREE.Mesh(new THREE.CapsuleGeometry(bodyRadius, bodyHeight, 6, 16), bodyMaterial);
+      body.position.y = -difficultySize * 1.25;
+      body.castShadow = true;
+      body.name = 'body';
+      const headMaterial = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
+      const head = new THREE.Mesh(new THREE.SphereGeometry(difficultySize, 24, 16), headMaterial);
+      head.name = 'head';
+      head.castShadow = true;
+      root.add(body, head);
       if (drill === 'braking') {
-        brakingElapsed = 0;
-        brakingDirection = Math.random() < 0.5 ? 1 : -1;
-        brakingCycles += 1;
-        target.position.set((Math.random() - .5) * 2.6, brakingTargetY + (Math.random() - .5) * .35, brakingTargetZ);
+        root.position.set((Math.random() - .5) * 2.6, brakingTargetY, brakingTargetZ);
       } else {
-        target.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
+        root.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
       }
-      target.castShadow = true;
-      group.add(target); targetMeshRef.current = target;
+      group.add(root);
+      targetRootRef.current = root;
+      targetMeshRef.current = head;
+      brakingMovedRef.current = false;
     };
     spawn();
     const raycaster = new THREE.Raycaster();
@@ -261,24 +268,35 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       event.preventDefault();
       if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock?.();
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-      const hit = targetMeshRef.current ? raycaster.intersectObject(targetMeshRef.current).length > 0 : false;
+      const intersections = targetRootRef.current ? raycaster.intersectObject(targetRootRef.current, true) : [];
+      const headHit = intersections.some((item) => item.object === targetMeshRef.current);
+      const bodyHit = intersections.length > 0 && !headHit;
       const next = { ...statsRef.current, shots: statsRef.current.shots + 1 };
       const brakingMoving = drill === 'braking' && velocity.length() > brakingStopThreshold;
-      const targetPoint = targetMeshRef.current ? targetMeshRef.current.getWorldPosition(new THREE.Vector3()) : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
+      const brakingNoMovement = drill === 'braking' && !brakingMovedRef.current;
+      const targetPoint = targetRootRef.current ? targetRootRef.current.getWorldPosition(new THREE.Vector3()) : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
       const tracerEnd = targetPoint.clone().add(new THREE.Vector3((Math.random() - .5) * .03, (Math.random() - .5) * .03, (Math.random() - .5) * .03));
       fireVisual(tracerEnd);
-      if (hit && !brakingMoving) {
+      if (drill === 'braking' && brakingNoMovement) {
+        next.streak = 0;
+        next.score = Math.max(0, next.score - 20);
+        setFeedback({ text: '먼저 A / D로 이동하세요 -20', miss: true, id: Date.now() });
+      } else if (headHit && !brakingMoving) {
         next.hits += 1;
         next.streak += 1;
         const stopQuality = drill === 'braking' ? Math.max(0, 1 - velocity.length() / .9) : 1;
         const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * (1 + stopQuality * .5) * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1));
         next.score += points;
-        setFeedback({ text: drill === 'braking' ? `브레이크 명중 +${points}` : `명중 +${points}`, miss: false, id: Date.now() });
+        setFeedback({ text: drill === 'braking' ? `브레이크 + 헤드샷 +${points}` : `헤드 명중 +${points}`, miss: false, id: Date.now() });
         spawn();
       } else {
         next.streak = 0;
         next.score = Math.max(0, next.score - 20);
-        setFeedback({ text: brakingMoving ? '이동 중 발사 -20' : '빗나감 -20', miss: true, id: Date.now() });
+        setFeedback({
+          text: brakingMoving ? '이동 중 발사 -20' : bodyHit ? '몸통 명중 — 헤드라인 연습 실패 -20' : '빗나감 -20',
+          miss: true,
+          id: Date.now()
+        });
       }
       next.accuracy = next.shots ? next.hits / next.shots * 100 : 0; statsRef.current = next; setStats({ ...next });
     };
@@ -299,6 +317,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
       const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * (drill === 'braking' ? 3.8 : moveSpeed)));
+      if (drill === 'braking' && horizontal !== 0) brakingMovedRef.current = true;
       const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? (drill === 'braking' ? 18 : 32) : (drill === 'braking' ? 52 : 42)) * Math.min(delta, .05));
       velocity.lerp(desired, blend);
       camera.position.addScaledVector(velocity, delta);
@@ -322,12 +341,6 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
           target.position.y += Math.cos(now * .001) * delta * .45;
           target.position.x = THREE.MathUtils.clamp(target.position.x, -4.8, 4.8);
           target.position.y = THREE.MathUtils.clamp(target.position.y, .8, 5.1);
-        }
-        if (drill === 'braking' && targetMeshRef.current) {
-          const target = targetMeshRef.current;
-          // The target stays still. The exercise is about YOUR strafe -> stop -> shot rhythm.
-          // Change the target's position only after a successful shot so each repetition is a fresh read.
-          if (brakingCycles === 0) spawn();
         }
       }
       renderer.render(scene, camera);
@@ -363,7 +376,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
          <div className="hud-metrics"><div className="hud-stat accent"><label>점수</label><strong data-testid="telemetry-score">{stats.score.toString().padStart(4, '0')}</strong></div><div className="hud-stat"><label>명중률</label><strong data-testid="telemetry-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="hud-stat"><label>연속 명중</label><strong data-testid="telemetry-streak">{stats.streak.toString().padStart(2, '0')}</strong></div></div>
          <div className={`hud-time ${timeLeft < 5 ? 'low' : ''}`}><label>남은 시간</label><strong data-testid="telemetry-time">{timeLeft.toFixed(1)}초</strong></div>
         <div className="crosshair" style={{ width: settings.crosshair, height: settings.crosshair }}><i /></div>
-        {drill === 'braking' && <div className="braking-guide"><b>브레이킹</b><span>A / D 이동 → 손을 떼거나 반대 입력 → 완전 정지 → CLICK</span></div>}
+        {drill === 'braking' && <div className="braking-guide"><b>브레이킹 · 헤드샷</b><span>A / D 이동 → 손을 떼거나 반대 입력 → 완전 정지 → 헤드라인 CLICK</span></div>}
         {feedback && <div key={feedback.id} className={`hit-feedback ${feedback.miss ? 'miss' : ''}`}>{feedback.text}</div>}
          {!pointerLocked && status === 'active' && <div className="pointer-lock-hint">클릭하여 시점 잠금 · 조준 시작</div>}
          <div className="hud-bottom"><div className="move-hint"><span>이동</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>마우스 시점 / 클릭 사격</span></div><div className="range-status"><Gauge size={13} style={{ verticalAlign: 'middle', marginRight: 7 }} /> 표적 프로필: <b>{difficulty === 'trainee' ? '연습생' : difficulty === 'elite' ? '엘리트' : '요원'}</b></div></div>
