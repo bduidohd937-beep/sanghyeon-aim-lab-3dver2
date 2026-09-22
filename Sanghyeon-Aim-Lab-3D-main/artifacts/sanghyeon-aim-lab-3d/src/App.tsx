@@ -243,40 +243,101 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       const headMaterial = new THREE.MeshStandardMaterial({ color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.2, metalness: .1, roughness: .38 });
       const accentMaterial = new THREE.MeshStandardMaterial({ color: '#222b2f', roughness: .65, metalness: .25 });
 
-      // Generic humanoid range bot: head / neck / torso / shoulders / arms / legs.
-      const head = new THREE.Mesh(new THREE.SphereGeometry(.23 * botScale, 20, 14), headMaterial);
+      // Low-poly humanoid training bot: every body region is a separate mesh
+      // so the silhouette reads clearly and hit detection can stay anatomical.
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(.235 * botScale, 20, 14),
+        headMaterial
+      );
       head.name = 'head';
       head.position.y = 1.63 * botScale;
 
-      const neck = new THREE.Mesh(new THREE.CylinderGeometry(.075 * botScale, .085 * botScale, .14 * botScale, 12), accentMaterial);
+      const neck = new THREE.Mesh(
+        new THREE.CylinderGeometry(.078 * botScale, .092 * botScale, .15 * botScale, 12),
+        accentMaterial
+      );
+      neck.name = 'body';
       neck.position.y = 1.40 * botScale;
 
-      const torso = new THREE.Mesh(new THREE.CapsuleGeometry(.32 * botScale, .58 * botScale, 6, 12), bodyMaterial);
+      // Broad shoulders flowing into a narrower waist: a human-like inverted-triangle torso.
+      const torso = new THREE.Mesh(
+        new THREE.CylinderGeometry(.40 * botScale, .255 * botScale, .62 * botScale, 4),
+        bodyMaterial
+      );
       torso.name = 'body';
-      torso.position.y = .99 * botScale;
+      torso.rotation.y = Math.PI / 4;
+      torso.position.y = 1.08 * botScale;
 
-      const shoulder = new THREE.Mesh(new THREE.BoxGeometry(.92 * botScale, .22 * botScale, .34 * botScale), bodyMaterial);
-      shoulder.position.y = 1.20 * botScale;
+      const shoulderBar = new THREE.Mesh(
+        new THREE.CylinderGeometry(.50 * botScale, .43 * botScale, .16 * botScale, 8),
+        bodyMaterial
+      );
+      shoulderBar.name = 'body';
+      shoulderBar.rotation.z = Math.PI / 2;
+      shoulderBar.position.y = 1.31 * botScale;
 
-      const armGeo = new THREE.CapsuleGeometry(.10 * botScale, .42 * botScale, 5, 10);
-      const leftArm = new THREE.Mesh(armGeo, bodyMaterial);
-      const rightArm = new THREE.Mesh(armGeo, bodyMaterial);
-      leftArm.name = 'body';
-      rightArm.name = 'body';
-      leftArm.position.set(-.48 * botScale, .94 * botScale, 0);
-      rightArm.position.set(.48 * botScale, .94 * botScale, 0);
-      leftArm.rotation.z = -.08;
-      rightArm.rotation.z = .08;
+      const waist = new THREE.Mesh(
+        new THREE.CylinderGeometry(.19 * botScale, .22 * botScale, .18 * botScale, 8),
+        accentMaterial
+      );
+      waist.name = 'body';
+      waist.position.y = .75 * botScale;
 
-      const legGeo = new THREE.CapsuleGeometry(.115 * botScale, .48 * botScale, 5, 10);
-      const leftLeg = new THREE.Mesh(legGeo, accentMaterial);
-      const rightLeg = new THREE.Mesh(legGeo, accentMaterial);
-      leftLeg.name = 'body';
-      rightLeg.name = 'body';
-      leftLeg.position.set(-.16 * botScale, .43 * botScale, 0);
-      rightLeg.position.set(.16 * botScale, .43 * botScale, 0);
+      // Separate pelvis gives the bot the requested V/triangle transition below the waist.
+      const pelvis = new THREE.Mesh(
+        new THREE.CylinderGeometry(.31 * botScale, .22 * botScale, .30 * botScale, 4),
+        bodyMaterial
+      );
+      pelvis.name = 'body';
+      pelvis.rotation.y = Math.PI / 4;
+      pelvis.position.y = .56 * botScale;
 
-      root.add(head, neck, torso, shoulder, leftArm, rightArm, leftLeg, rightLeg);
+      const upperArmGeo = new THREE.CapsuleGeometry(.095 * botScale, .34 * botScale, 5, 10);
+      const forearmGeo = new THREE.CapsuleGeometry(.082 * botScale, .30 * botScale, 5, 10);
+      const leftUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
+      const rightUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
+      const leftForearm = new THREE.Mesh(forearmGeo, accentMaterial);
+      const rightForearm = new THREE.Mesh(forearmGeo, accentMaterial);
+      [leftUpperArm, rightUpperArm, leftForearm, rightForearm].forEach((part) => { part.name = 'body'; });
+      leftUpperArm.position.set(-.51 * botScale, 1.10 * botScale, 0);
+      rightUpperArm.position.set(.51 * botScale, 1.10 * botScale, 0);
+      leftUpperArm.rotation.z = -.10;
+      rightUpperArm.rotation.z = .10;
+      leftForearm.position.set(-.56 * botScale, .82 * botScale, 0);
+      rightForearm.position.set(.56 * botScale, .82 * botScale, 0);
+      leftForearm.rotation.z = -.06;
+      rightForearm.rotation.z = .06;
+
+      const thighGeo = new THREE.CapsuleGeometry(.13 * botScale, .42 * botScale, 5, 10);
+      const shinGeo = new THREE.CapsuleGeometry(.105 * botScale, .38 * botScale, 5, 10);
+      const leftThigh = new THREE.Mesh(thighGeo, bodyMaterial);
+      const rightThigh = new THREE.Mesh(thighGeo, bodyMaterial);
+      const leftShin = new THREE.Mesh(shinGeo, accentMaterial);
+      const rightShin = new THREE.Mesh(shinGeo, accentMaterial);
+      [leftThigh, rightThigh, leftShin, rightShin].forEach((part) => { part.name = 'body'; });
+      leftThigh.position.set(-.15 * botScale, .30 * botScale, 0);
+      rightThigh.position.set(.15 * botScale, .30 * botScale, 0);
+      leftShin.position.set(-.15 * botScale, -.04 * botScale, 0);
+      rightShin.position.set(.15 * botScale, -.04 * botScale, 0);
+
+      const leftFoot = new THREE.Mesh(
+        new THREE.BoxGeometry(.18 * botScale, .10 * botScale, .30 * botScale),
+        accentMaterial
+      );
+      const rightFoot = new THREE.Mesh(
+        new THREE.BoxGeometry(.18 * botScale, .10 * botScale, .30 * botScale),
+        accentMaterial
+      );
+      leftFoot.name = 'body';
+      rightFoot.name = 'body';
+      leftFoot.position.set(-.15 * botScale, -.30 * botScale, -.07 * botScale);
+      rightFoot.position.set(.15 * botScale, -.30 * botScale, -.07 * botScale);
+
+      root.add(
+        head, neck, shoulderBar, torso, waist, pelvis,
+        leftUpperArm, rightUpperArm, leftForearm, rightForearm,
+        leftThigh, rightThigh, leftShin, rightShin, leftFoot, rightFoot
+      );
       if (drill === 'braking') {
         // Keep the bot's head on a consistent VALORANT-style head line,
         // while randomizing horizontal lane and distance.
