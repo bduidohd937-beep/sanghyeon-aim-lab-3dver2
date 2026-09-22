@@ -161,10 +161,73 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
     const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
     const group = new THREE.Group(); scene.add(group);
+
+    // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
+    const weapon = new THREE.Group();
+    weapon.position.set(.34, -.27, -.72);
+    weapon.rotation.set(-.03, -.03, -.02);
+    const weaponBody = new THREE.Mesh(
+      new THREE.BoxGeometry(.24, .16, .55),
+      new THREE.MeshStandardMaterial({ color: '#20282c', roughness: .62, metalness: .55 })
+    );
+    weaponBody.position.z = -.12;
+    weapon.add(weaponBody);
+    const weaponGrip = new THREE.Mesh(
+      new THREE.BoxGeometry(.11, .25, .13),
+      new THREE.MeshStandardMaterial({ color: '#111719', roughness: .8, metalness: .1 })
+    );
+    weaponGrip.position.set(.01, -.16, .04);
+    weaponGrip.rotation.x = -.18;
+    weapon.add(weaponGrip);
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(.035, .035, .55, 12),
+      new THREE.MeshStandardMaterial({ color: '#090d0f', roughness: .4, metalness: .8 })
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, .01, -.57);
+    weapon.add(barrel);
+    const sight = new THREE.Mesh(
+      new THREE.BoxGeometry(.055, .045, .16),
+      new THREE.MeshStandardMaterial({ color: '#7dff39', emissive: '#406d20', emissiveIntensity: .7, roughness: .3 })
+    );
+    sight.position.set(0, .105, -.25);
+    weapon.add(sight);
+    camera.add(weapon);
+    scene.add(camera);
+
+    const muzzleFlash = new THREE.Mesh(
+      new THREE.SphereGeometry(.065, 8, 8),
+      new THREE.MeshBasicMaterial({ color: '#fff2a3', transparent: true, opacity: 0 })
+    );
+    muzzleFlash.position.set(.34, -.26, -1.3);
+    camera.add(muzzleFlash);
+
+    const createTracer = (end: THREE.Vector3) => {
+      const start = new THREE.Vector3();
+      muzzleFlash.getWorldPosition(start);
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+      const material = new THREE.LineBasicMaterial({ color: '#eaff9a', transparent: true, opacity: .9 });
+      const tracer = new THREE.Line(geometry, material);
+      scene.add(tracer);
+      window.setTimeout(() => {
+        scene.remove(tracer);
+        geometry.dispose();
+        material.dispose();
+      }, 55);
+    };
+
+    const fireVisual = (end: THREE.Vector3) => {
+      muzzleFlash.material.opacity = 1;
+      window.setTimeout(() => { muzzleFlash.material.opacity = 0; }, 45);
+      createTracer(end);
+    };
+
     let brakingElapsed = 0;
-    let brakingDirection = Math.random() < 0.5 ? 1 : -1;
-    const brakingDuration = 0.9;
-    const brakingStartX = () => (brakingDirection > 0 ? -4.6 : 4.6);
+    let brakingDirection = 0;
+    let brakingCycles = 0;
+    const brakingStopThreshold = .16;
+    const brakingTargetY = 2.25;
+    const brakingTargetZ = -4.2;
     const spawn = () => {
       if (targetMeshRef.current) group.remove(targetMeshRef.current);
       const geometry = new THREE.CylinderGeometry(difficultySize, difficultySize, .12, 32);
@@ -174,7 +237,8 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       if (drill === 'braking') {
         brakingElapsed = 0;
         brakingDirection = Math.random() < 0.5 ? 1 : -1;
-        target.position.set(brakingStartX(), 1.45 + Math.random() * 3.1, -1.8 - Math.random() * 4.1);
+        brakingCycles += 1;
+        target.position.set((Math.random() - .5) * 2.6, brakingTargetY + (Math.random() - .5) * .35, brakingTargetZ);
       } else {
         target.position.set((Math.random() - .5) * 8, 1.25 + Math.random() * 3.7, -1.2 - Math.random() * 4.8);
       }
@@ -199,18 +263,22 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
       const hit = targetMeshRef.current ? raycaster.intersectObject(targetMeshRef.current).length > 0 : false;
       const next = { ...statsRef.current, shots: statsRef.current.shots + 1 };
-      if (hit) {
+      const brakingMoving = drill === 'braking' && velocity.length() > brakingStopThreshold;
+      const targetPoint = targetMeshRef.current ? targetMeshRef.current.getWorldPosition(new THREE.Vector3()) : camera.position.clone().add(new THREE.Vector3(0, 0, -30).applyQuaternion(camera.quaternion));
+      const tracerEnd = targetPoint.clone().add(new THREE.Vector3((Math.random() - .5) * .03, (Math.random() - .5) * .03, (Math.random() - .5) * .03));
+      fireVisual(tracerEnd);
+      if (hit && !brakingMoving) {
         next.hits += 1;
         next.streak += 1;
-        const brakingBonus = drill === 'braking' && brakingElapsed >= brakingDuration && brakingElapsed <= brakingDuration + .55 ? 1.25 : 1;
-        const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * brakingBonus * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1));
+        const stopQuality = drill === 'braking' ? Math.max(0, 1 - velocity.length() / .9) : 1;
+        const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * (1 + stopQuality * .5) * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1));
         next.score += points;
-        setFeedback({ text: `명중 +${points}`, miss: false, id: Date.now() });
+        setFeedback({ text: drill === 'braking' ? `브레이크 명중 +${points}` : `명중 +${points}`, miss: false, id: Date.now() });
         spawn();
       } else {
         next.streak = 0;
         next.score = Math.max(0, next.score - 20);
-        setFeedback({ text: '빗나감 -20', miss: true, id: Date.now() });
+        setFeedback({ text: brakingMoving ? '이동 중 발사 -20' : '빗나감 -20', miss: true, id: Date.now() });
       }
       next.accuracy = next.shots ? next.hits / next.shots * 100 : 0; statsRef.current = next; setStats({ ...next });
     };
@@ -225,13 +293,13 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     const moveSpeed = 4.5;
     const applyMovement = (delta: number) => {
       const horizontal = Number(keys.has('d')) - Number(keys.has('a'));
-      const forwardInput = Number(keys.has('w')) - Number(keys.has('s'));
+      const forwardInput = drill === 'braking' ? 0 : Number(keys.has('w')) - Number(keys.has('s'));
       const input = new THREE.Vector3(horizontal, 0, forwardInput);
       if (input.lengthSq() > 1) input.normalize();
       const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
       const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-      const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * moveSpeed));
-      const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? 32 : 42) * Math.min(delta, .05));
+      const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * (drill === 'braking' ? 3.8 : moveSpeed)));
+      const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? (drill === 'braking' ? 18 : 32) : (drill === 'braking' ? 52 : 42)) * Math.min(delta, .05));
       velocity.lerp(desired, blend);
       camera.position.addScaledVector(velocity, delta);
       camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
@@ -257,18 +325,9 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         }
         if (drill === 'braking' && targetMeshRef.current) {
           const target = targetMeshRef.current;
-          brakingElapsed += delta;
-          const t = Math.min(brakingElapsed / brakingDuration, 1);
-          // Fast entry followed by a strong deceleration into a short stop window.
-          const eased = 1 - Math.pow(1 - t, 3);
-          target.position.x = brakingStartX() + brakingDirection * 8.8 * eased;
-          if (t >= 1) {
-            // Hold briefly, then restart the same drill cycle from the opposite side.
-            if (brakingElapsed >= brakingDuration + .55) {
-              brakingDirection *= -1;
-              brakingElapsed = 0;
-            }
-          }
+          // The target stays still. The exercise is about YOUR strafe -> stop -> shot rhythm.
+          // Change the target's position only after a successful shot so each repetition is a fresh read.
+          if (brakingCycles === 0) spawn();
         }
       }
       renderer.render(scene, camera);
@@ -304,6 +363,7 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
          <div className="hud-metrics"><div className="hud-stat accent"><label>점수</label><strong data-testid="telemetry-score">{stats.score.toString().padStart(4, '0')}</strong></div><div className="hud-stat"><label>명중률</label><strong data-testid="telemetry-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="hud-stat"><label>연속 명중</label><strong data-testid="telemetry-streak">{stats.streak.toString().padStart(2, '0')}</strong></div></div>
          <div className={`hud-time ${timeLeft < 5 ? 'low' : ''}`}><label>남은 시간</label><strong data-testid="telemetry-time">{timeLeft.toFixed(1)}초</strong></div>
         <div className="crosshair" style={{ width: settings.crosshair, height: settings.crosshair }}><i /></div>
+        {drill === 'braking' && <div className="braking-guide"><b>브레이킹</b><span>A / D 이동 → 손을 떼거나 반대 입력 → 완전 정지 → CLICK</span></div>}
         {feedback && <div key={feedback.id} className={`hit-feedback ${feedback.miss ? 'miss' : ''}`}>{feedback.text}</div>}
          {!pointerLocked && status === 'active' && <div className="pointer-lock-hint">클릭하여 시점 잠금 · 조준 시작</div>}
          <div className="hud-bottom"><div className="move-hint"><span>이동</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>마우스 시점 / 클릭 사격</span></div><div className="range-status"><Gauge size={13} style={{ verticalAlign: 'middle', marginRight: 7 }} /> 표적 프로필: <b>{difficulty === 'trainee' ? '연습생' : difficulty === 'elite' ? '엘리트' : '요원'}</b></div></div>
