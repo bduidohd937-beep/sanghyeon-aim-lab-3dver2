@@ -475,12 +475,14 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
         weapon.position.y = baseWeaponY + recoilKick * .32;
         weapon.rotation.x = -.03 + recoilKick * 1.7;
         weapon.rotation.z = -.02 + recoilRoll;
-        if (drill === 'tracking' && targetMeshRef.current) {
-          const target = targetMeshRef.current;
-          target.position.x += Math.sin(now * .0012) * delta * .8;
-          target.position.y += Math.cos(now * .001) * delta * .45;
-          target.position.x = THREE.MathUtils.clamp(target.position.x, -4.8, 4.8);
-          target.position.y = THREE.MathUtils.clamp(target.position.y, .8, 5.1);
+        if (drill === 'tracking' && targetRootRef.current) {
+          // Tracking follows the bot's HEAD, but the whole humanoid moves together.
+          const root = targetRootRef.current;
+          root.position.x = Math.sin(now * .00075) * 3.1;
+          root.position.y = (2.25 - 1.70 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94))
+            + Math.sin(now * .0011) * .38;
+          root.position.z = -6.2 + Math.sin(now * .00055) * 1.15;
+          root.rotation.y = Math.sin(now * .00065) * .10;
         }
       }
       renderer.render(scene, camera);
