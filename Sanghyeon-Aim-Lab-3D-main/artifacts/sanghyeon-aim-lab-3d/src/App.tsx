@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -11,7 +11,8 @@ import * as THREE from 'three';
 type Drill = 'flick' | 'tracking' | 'braking';
 type View = 'home' | 'range' | 'results' | 'sensitivity' | 'growth';
 type RunStatus = 'active' | 'paused' | 'done';
-type CrosshairConfig = { style: 'classic' | 'dot' | 'cross-dot'; color: string; size: number; gap: number; thickness: number; outline: boolean; centerDot: boolean };\ntype Settings = { sensitivity: number; crosshair: CrosshairConfig };
+type CrosshairConfig = { style: 'classic' | 'dot' | 'cross-dot'; color: string; size: number; gap: number; thickness: number; outline: boolean; centerDot: boolean };
+type Settings = { sensitivity: number; crosshair: CrosshairConfig };
 type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number };
 type HistoryItem = { score: number; accuracy: number; drill: Drill; date: string; hits?: number; shots?: number; streak?: number };
 
@@ -74,16 +75,16 @@ function SettingsPanel({ settings, onChange, onClose }: { settings: Settings; on
   return (
     <div className="modal-dim" role="dialog" aria-modal="true" aria-label="Range settings" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
       <div className="pause-modal settings-modal">
-        <div className="panel-kicker"><span>감도 설정 / 02</span><button className="hud-button" onClick={onClose} data-testid="button-close-settings" aria-label="설정 닫기"><X size={16} /></button></div>
-        <h2>조작 설정</h2>
-        <p>내 마우스와 손에 맞게 훈련 환경을 조정하세요.</p>
+        <div className="panel-kicker"><span>媛먮룄 ?ㅼ젙 / 02</span><button className="hud-button" onClick={onClose} data-testid="button-close-settings" aria-label="?ㅼ젙 ?リ린"><X size={16} /></button></div>
+        <h2>議곗옉 ?ㅼ젙</h2>
+        <p>??留덉슦?ㅼ? ?먯뿉 留욊쾶 ?덈젴 ?섍꼍??議곗젙?섏꽭??</p>
         <div className="settings-row">
-          <label htmlFor="sensitivity">마우스 감도</label>
+          <label htmlFor="sensitivity">留덉슦??媛먮룄</label>
           <input id="sensitivity" type="range" min="0.4" max="2.4" step="0.05" value={settings.sensitivity} onChange={(event) => onChange({ ...settings, sensitivity: Number(event.target.value) })} data-testid="input-sensitivity" />
           <output htmlFor="sensitivity">{settings.sensitivity.toFixed(2)}</output>
         </div>
         <div className="settings-row">
-          <label htmlFor="crosshair">크로스헤어 크기</label>
+          <label htmlFor="crosshair">?щ줈?ㅽ뿤???ш린</label>
           <input id="crosshair" type="range" min="22" max="56" step="2" value={settings.crosshair.size} onChange={(event) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(event.target.value) } })} data-testid="input-crosshair-size" />
           <output htmlFor="crosshair">{settings.crosshair.size}px</output>
         </div>
@@ -93,49 +94,491 @@ function SettingsPanel({ settings, onChange, onClose }: { settings: Settings; on
   );
 }
 
-function Home({ settings, onSettings, onStart, history, onNavigate }: { settings: Settings; onSettings: () => void; onStart: (drill: Drill, duration: number, difficulty: string) => void; history: HistoryItem[]; onNavigate: (view: View) => void }) {
+function Home({
+  settings,
+  onSettings,
+  onStart,
+  history,
+  onNavigate,
+}: {
+  settings: Settings;
+  onSettings: () => void;
+  onStart: (drill: Drill, duration: number, difficulty: string) => void;
+  history: HistoryItem[];
+  onNavigate: (view: View) => void;
+}) {
   const [drill, setDrill] = useState<Drill>('flick');
   const [duration, setDuration] = useState(30);
   const [difficulty, setDifficulty] = useState('operator');
-  const best = history.length ? Math.max(...history.map((item) => item.score)) : 0;
+
+  const best = history.length
+    ? Math.max(...history.map((item) => item.score))
+    : 0;
+
   const lastAccuracy = history[0]?.accuracy ?? 0;
-  const updateCrosshair = (next: CrosshairConfig) => onNavigate('home') || saveStorage('sanghyeon-settings', { ...settings, crosshair: next });
 
-  return <div className="aim-app">
-    <header className="app-header">
-      <Brand />
-      <nav className="main-nav"><button className="active" onClick={() => onNavigate('home')}>LAB</button><button onClick={() => onNavigate('sensitivity')}>감도 찾기</button><button onClick={() => onNavigate('growth')}>성장 기록</button></nav>
-      <div className="header-meta"><span><span className="live-dot" style={{ display: 'inline-block', marginRight: 8 }} /> RANGE 01 / READY</span><strong>LV.{Math.max(1, Math.floor(history.length / 5) + 1)}</strong><button className="hud-button" onClick={onSettings} aria-label="설정"><Settings2 size={16} /></button></div>
-    </header>
-    <div className="home-layout">
-      <main className="home-main">
-        <div className="eyebrow"><span className="eyebrow-line" /> TRAINING PROTOCOL // 3D AIM LAB</div>
-        <h1 className="hero-title">조준을<br /><em>정교하게.</em></h1>
-        <p className="hero-copy">이전 상현랩의 훈련 콘솔 UX를 유지하면서 실제 1인칭 3D 사격장으로 확장했습니다.</p>
-        <div className="drill-heading"><h2>훈련 선택</h2><span>01 — 03</span></div>
-        <div className="drill-grid">
-          <button className={`drill-card ${drill === 'flick' ? 'selected' : ''}`} onClick={() => setDrill('flick')}><Crosshair className="drill-icon" size={24} /><h3>플릭 / 순간 조준</h3><p>표적 출현 → 마우스 이동 → 정확한 클릭. 첫 발의 속도와 정확도를 측정합니다.</p></button>
-          <button className={`drill-card ${drill === 'tracking' ? 'selected' : ''}`} onClick={() => setDrill('tracking')}><Target className="drill-icon" size={24} /><h3>트래킹 / 추적 조준</h3><p>발로란트식 좌우 스트레이핑 봇을 따라가며 머리 라인을 유지합니다.</p></button>
-          <button className={`drill-card ${drill === 'braking' ? 'selected' : ''}`} onClick={() => setDrill('braking')}><Gauge className="drill-icon" size={24} /><h3>브레이킹 / 감속 조준</h3><p>A/D 이동 → 정지 → 헤드샷. 카운터 스트레이핑과 첫 발을 함께 훈련합니다.</p></button>
+  const updateCrosshair = (next: CrosshairConfig) => {
+    saveStorage('sanghyeon-settings', {
+      ...settings,
+      crosshair: next,
+    });
+    onNavigate('home');
+  };
+
+  return (
+    <div className="aim-app">
+      <header className="app-header">
+        <Brand />
+
+        <nav className="main-nav">
+          <button
+            className="active"
+            onClick={() => onNavigate('home')}
+          >
+            LAB
+          </button>
+
+          <button onClick={() => onNavigate('sensitivity')}>
+            감도 찾기
+          </button>
+
+          <button onClick={() => onNavigate('growth')}>
+            성장 기록
+          </button>
+        </nav>
+
+        <div className="header-meta">
+          <span>
+            <span
+              className="live-dot"
+              style={{ display: 'inline-block', marginRight: 8 }}
+            />
+            RANGE 01 / READY
+          </span>
+
+          <strong>
+            LV.{Math.max(1, Math.floor(history.length / 5) + 1)}
+          </strong>
+
+          <button
+            className="hud-button"
+            onClick={onSettings}
+            aria-label="설정"
+          >
+            <Settings2 size={16} />
+          </button>
         </div>
-        <div className="setup-row"><div><label className="field-label">훈련 시간</label><select className="select-field" value={duration} onChange={e => setDuration(Number(e.target.value))}><option value={15}>15초</option><option value={30}>30초</option><option value={60}>60초</option></select></div><div><label className="field-label">표적 난이도</label><select className="select-field" value={difficulty} onChange={e => setDifficulty(e.target.value)}><option value="trainee">연습생 / 넓은 표적</option><option value="operator">요원 / 기본</option><option value="elite">엘리트 / 작은 표적</option></select></div><button className="start-button" onClick={() => onStart(drill, duration, difficulty)}><Play size={16} fill="currentColor" /> 훈련 시작</button></div>
-        <div className="utility-note"><Keyboard size={14} /><span>이동</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>마우스 시점 / 클릭 사격</span></div>
+      </header>
 
-        <section className="restored-section"><div className="section-title"><div><p className="eyebrow">PERSONAL TOOLS</p><h2>개인 도구</h2></div></div><div className="tool-grid"><button className="tool-card" onClick={() => onNavigate('sensitivity')}><b>🖱️ 내 감도 찾기</b><span>DPI·게임 감도·eDPI·cm/360을 계산하고 후보 감도를 비교합니다.</span><i>OPEN →</i></button><button className="tool-card" onClick={() => onNavigate('growth')}><b>📈 성장 기록</b><span>최근 평균, 최고 점수, 모듈별 기록과 훈련량을 확인합니다.</span><i>OPEN →</i></button></div></section>
+      <div className="home-layout">
+        <main className="home-main">
+          <div className="eyebrow">
+            <span className="eyebrow-line" />
+            TRAINING PROTOCOL // 3D AIM LAB
+          </div>
 
-        <section className="restored-section"><div className="section-title"><div><p className="eyebrow">CROSSHAIR</p><h2>조준선</h2></div><span className="phase">GLOBAL</span></div>
-          <div className="crosshair-panel panel"><div className="crosshair-preview"><CrosshairView config={settings.crosshair} /></div><div className="crosshair-controls">
-            <div className="preset-row">{Object.entries(CROSSHAIR_PRESETS).map(([name, config]) => <button key={name} className={`preset ${settings.crosshair.style === config.style && settings.crosshair.size === config.size ? 'selected' : ''}`} onClick={() => onNavigate('home') || updateCrosshair(config)}>{name}</button>)}</div>
-            <div className="control-row"><label>색상<input type="color" value={settings.crosshair.color} onChange={e => updateCrosshair({ ...settings.crosshair, color: e.target.value })} /></label><label>크기<input type="range" min="12" max="64" value={settings.crosshair.size} onChange={e => updateCrosshair({ ...settings.crosshair, size: Number(e.target.value) })} /></label><label>간격<input type="range" min="0" max="12" value={settings.crosshair.gap} onChange={e => updateCrosshair({ ...settings.crosshair, gap: Number(e.target.value) })} /></label><label>두께<input type="range" min="1" max="5" value={settings.crosshair.thickness} onChange={e => updateCrosshair({ ...settings.crosshair, thickness: Number(e.target.value) })} /></label></div>
-            <div className="toggle-row"><label><input type="checkbox" checked={settings.crosshair.outline} onChange={e => updateCrosshair({ ...settings.crosshair, outline: e.target.checked })} /> 외곽선</label><label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={e => updateCrosshair({ ...settings.crosshair, centerDot: e.target.checked })} /> 중앙점</label></div>
-          </div></div>
-        </section>
-      </main>
-      <aside className="side-panel"><div className="panel-kicker"><span>개인 기록</span><span>RESTORED / 3D</span></div><h2 className="panel-title">훈련 기록</h2><div className="telemetry-hero"><span className="metric-label">최고 점수</span><strong className="metric-value">{best ? best.toLocaleString() : '—'}</strong><span className="metric-caption">{history.length ? '나의 최고 기록' : '훈련을 완료하면 기록이 저장됩니다'}</span></div><div className="side-rule" /><div className="stat-list"><div className="stat-row"><span>오늘 완료</span><strong>{history.length.toString().padStart(2,'0')}</strong></div><div className="stat-row"><span>누적 훈련</span><strong>{history.length.toString().padStart(2,'0')}</strong></div><div className="stat-row"><span>최근 명중률</span><strong>{history.length ? `${lastAccuracy.toFixed(1)}%` : '—'}</strong></div><div className="stat-row"><span>현재 감도</span><strong>{settings.sensitivity.toFixed(2)}</strong></div></div><div className="side-rule" /><div className="history-title">최근 훈련</div>{history.length === 0 ? <div className="history-row"><small>아직 기록이 없습니다</small><strong>—</strong></div> : history.slice(0,6).map((item,index)=><div className="history-row" key={`${item.date}-${index}`}><div><strong>{item.score.toLocaleString()}</strong><small style={{display:'block',marginTop:4}}>{item.drill==='flick'?'플릭':item.drill==='tracking'?'트래킹':'브레이킹'} / {item.date}</small></div><em>{item.accuracy.toFixed(1)}%</em></div>)}</aside>
+          <h1 className="hero-title">
+            조준을
+            <br />
+            <em>정밀하게.</em>
+          </h1>
+
+          <p className="hero-copy">
+            기존 상현랩의 에임 훈련 UX를 유지하면서
+            실제 1인칭 3D 훈련장으로 확장했습니다.
+          </p>
+
+          <div className="drill-heading">
+            <h2>훈련 선택</h2>
+            <span>01 // 03</span>
+          </div>
+
+          <div className="drill-grid">
+            <button
+              className={`drill-card ${
+                drill === 'flick' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('flick')}
+            >
+              <Crosshair className="drill-icon" size={24} />
+
+              <h3>플릭 / 순간 조준</h3>
+
+              <p>
+                목표가 출현하면 마우스를 빠르게 이동해
+                정확하게 클릭합니다. 첫 발의 속도와
+                정확도를 측정합니다.
+              </p>
+            </button>
+
+            <button
+              className={`drill-card ${
+                drill === 'tracking' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('tracking')}
+            >
+              <Target className="drill-icon" size={24} />
+
+              <h3>트래킹 / 추적 조준</h3>
+
+              <p>
+                발로란트식 좌우 스트레이핑 타겟을 따라가며
+                머리 라인을 안정적으로 유지합니다.
+              </p>
+            </button>
+
+            <button
+              className={`drill-card ${
+                drill === 'braking' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('braking')}
+            >
+              <Gauge className="drill-icon" size={24} />
+
+              <h3>브레이킹 / 감속 조준</h3>
+
+              <p>
+                A/D 이동 후 정확히 멈추고 타겟을 클릭하여
+                카운터 스트레이핑과 첫 발 정확도를 훈련합니다.
+              </p>
+            </button>
+          </div>
+
+          <div className="setup-row">
+            <div>
+              <label className="field-label">훈련 시간</label>
+
+              <select
+                className="select-field"
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              >
+                <option value={15}>15초</option>
+                <option value={30}>30초</option>
+                <option value={60}>60초</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">훈련 난이도</label>
+
+              <select
+                className="select-field"
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+              >
+                <option value="trainee">
+                  트레이니 / 쉬운 타겟
+                </option>
+
+                <option value="operator">
+                  오퍼레이터 / 기본
+                </option>
+
+                <option value="elite">
+                  엘리트 / 빠른 타겟
+                </option>
+              </select>
+            </div>
+
+            <button
+              className="start-button"
+              onClick={() => onStart(drill, duration, difficulty)}
+            >
+              <Play size={16} fill="currentColor" />
+              훈련 시작
+            </button>
+          </div>
+
+          <div className="utility-note">
+            <Keyboard size={14} />
+
+            <span>이동</span>
+
+            <kbd>W</kbd>
+            <kbd>A</kbd>
+            <kbd>S</kbd>
+            <kbd>D</kbd>
+
+            <span>
+              마우스 시점 / 클릭 조준
+            </span>
+          </div>
+
+          <section className="restored-section">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">PERSONAL TOOLS</p>
+                <h2>개인 도구</h2>
+              </div>
+            </div>
+
+            <div className="tool-grid">
+              <button
+                className="tool-card"
+                onClick={() => onNavigate('sensitivity')}
+              >
+                <b>정밀 감도 찾기</b>
+
+                <span>
+                  DPI · 게임 감도 · eDPI · cm/360을 계산하고
+                  후보 감도를 비교합니다.
+                </span>
+
+                <i>OPEN →</i>
+              </button>
+
+              <button
+                className="tool-card"
+                onClick={() => onNavigate('growth')}
+              >
+                <b>에임 성장 기록</b>
+
+                <span>
+                  최근 평균, 최고 점수, 모드별 기록과
+                  훈련 성장을 확인합니다.
+                </span>
+
+                <i>OPEN →</i>
+              </button>
+            </div>
+          </section>
+
+          <section className="restored-section">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">CROSSHAIR</p>
+                <h2>조준선</h2>
+              </div>
+
+              <span className="phase">GLOBAL</span>
+            </div>
+
+            <div className="crosshair-panel panel">
+              <div className="crosshair-preview">
+                <CrosshairView config={settings.crosshair} />
+              </div>
+
+              <div className="crosshair-controls">
+                <div className="preset-row">
+                  {Object.entries(CROSSHAIR_PRESETS).map(
+                    ([name, config]) => (
+                      <button
+                        key={name}
+                        className={`preset ${
+                          settings.crosshair.style === config.style &&
+                          settings.crosshair.size === config.size
+                            ? 'selected'
+                            : ''
+                        }`}
+                        onClick={() => updateCrosshair(config)}
+                      >
+                        {name}
+                      </button>
+                    ),
+                  )}
+                </div>
+
+                <div className="control-row">
+                  <label>
+                    색상
+                    <input
+                      type="color"
+                      value={settings.crosshair.color}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          color: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    크기
+                    <input
+                      type="range"
+                      min="12"
+                      max="64"
+                      value={settings.crosshair.size}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          size: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    간격
+                    <input
+                      type="range"
+                      min="0"
+                      max="12"
+                      value={settings.crosshair.gap}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          gap: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    두께
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={settings.crosshair.thickness}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          thickness: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="toggle-row">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.crosshair.outline}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          outline: e.target.checked,
+                        })
+                      }
+                    />
+                    외곽선
+                  </label>
+
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.crosshair.centerDot}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          centerDot: e.target.checked,
+                        })
+                      }
+                    />
+                    중앙점
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside className="side-panel">
+          <div className="panel-kicker">
+            <span>개인 기록</span>
+            <span>RESTORED / 3D</span>
+          </div>
+
+          <h2 className="panel-title">훈련 기록</h2>
+
+          <div className="telemetry-hero">
+            <span className="metric-label">최고 점수</span>
+
+            <strong className="metric-value">
+              {best ? best.toLocaleString() : '--'}
+            </strong>
+
+            <span className="metric-caption">
+              {history.length
+                ? '현재 최고 기록'
+                : '훈련을 완료하면 기록이 저장됩니다'}
+            </span>
+          </div>
+
+          <div className="side-rule" />
+
+          <div className="stat-list">
+            <div className="stat-row">
+              <span>오늘 완료</span>
+              <strong>
+                {history.length.toString().padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>누적 훈련</span>
+              <strong>
+                {history.length.toString().padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>최근 명중률</span>
+              <strong>
+                {history.length
+                  ? `${lastAccuracy.toFixed(1)}%`
+                  : '--'}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>현재 감도</span>
+              <strong>
+                {settings.sensitivity.toFixed(2)}
+              </strong>
+            </div>
+          </div>
+
+          <div className="side-rule" />
+
+          <div className="history-title">최근 훈련</div>
+
+          {history.length === 0 ? (
+            <div className="history-row">
+              <small>아직 기록이 없습니다.</small>
+              <strong>--</strong>
+            </div>
+          ) : (
+            history.slice(0, 6).map((item, index) => (
+              <div
+                className="history-row"
+                key={`${item.date}-${index}`}
+              >
+                <div>
+                  <strong>
+                    {item.score.toLocaleString()}
+                  </strong>
+
+                  <small
+                    style={{
+                      display: 'block',
+                      marginTop: 4,
+                    }}
+                  >
+                    {item.drill === 'flick'
+                      ? '플릭'
+                      : item.drill === 'tracking'
+                        ? '트래킹'
+                        : '브레이킹'}{' '}
+                    / {item.date}
+                  </small>
+                </div>
+
+                <em>
+                  {item.accuracy.toFixed(1)}%
+                </em>
+              </div>
+            ))
+          )}
+        </aside>
+      </div>
     </div>
-  </div>;
+  );
 }
-
 function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
   const mountRef = useRef<HTMLDivElement>(null);
   const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration });
@@ -440,20 +883,20 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
       if (drill === 'braking' && brakingNoMovement) {
         next.streak = 0;
         next.score = Math.max(0, next.score - 20);
-        setFeedback({ text: '먼저 A / D로 이동하세요 -20', miss: true, id: Date.now() });
+        setFeedback({ text: '이동 중 발사 -20', miss: true, id: Date.now() });
       } else if (headHit && !brakingMoving) {
         next.hits += 1;
         next.streak += 1;
         const stopQuality = drill === 'braking' ? Math.max(0, 1 - velocity.length() / .9) : 1;
         const points = Math.round(100 * (1 + Math.min(next.streak, 15) * .08) * (1 + stopQuality * .5) * (difficulty === 'elite' ? 1.35 : difficulty === 'trainee' ? .8 : 1));
         next.score += points;
-        setFeedback({ text: drill === 'braking' ? `브레이크 + 헤드샷 +${points}` : `헤드 명중 +${points}`, miss: false, id: Date.now() });
+        setFeedback({ text: drill === 'braking' ? `釉뚮젅?댄겕 + ?ㅻ뱶??+${points}` : `?ㅻ뱶 紐낆쨷 +${points}`, miss: false, id: Date.now() });
         spawn();
       } else {
         next.streak = 0;
         next.score = Math.max(0, next.score - 20);
         setFeedback({
-          text: brakingMoving ? '이동 중 발사 -20' : bodyHit ? '몸통 명중 — 헤드라인 연습 실패 -20' : '빗나감 -20',
+          text: brakingMoving ? '?대룞 以?諛쒖궗 -20' : bodyHit ? '紐명넻 紐낆쨷 ???ㅻ뱶?쇱씤 ?곗뒿 ?ㅽ뙣 -20' : '鍮쀫굹媛?-20',
           miss: true,
           id: Date.now()
         });
@@ -566,51 +1009,732 @@ function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, o
     if (document.pointerLockElement) document.exitPointerLock();
     finish();
   };
-  return (
+   return (
     <div className="range-screen">
-      <div ref={mountRef} className="range-canvas-wrap" data-testid="canvas-3d-range" />
+      <div
+        ref={mountRef}
+        className="range-canvas-wrap"
+        data-testid="canvas-3d-range"
+      />
+
       <div className="range-hud">
-         <div className="hud-top"><div className="hud-brand"><b>사격장 01</b> / {drill === 'flick' ? '순간 조준' : drill === 'tracking' ? '추적 조준' : '브레이킹'} / 진행 중</div><div className="hud-actions"><button className="hud-button" onClick={() => setSettingsOpen(true)} aria-label="훈련 설정 열기" data-testid="button-range-settings"><Settings2 size={16} /></button><button className="hud-button" onClick={togglePause} aria-label={status === 'paused' ? '훈련 재개' : '훈련 일시정지'} data-testid="button-pause-run">{status === 'paused' ? <Play size={16} /> : <Pause size={16} />}</button><button className="hud-button" onClick={exit} aria-label="훈련 종료" data-testid="button-exit-run"><X size={17} /></button></div></div>
-         <div className="hud-metrics"><div className="hud-stat accent"><label>점수</label><strong data-testid="telemetry-score">{stats.score.toString().padStart(4, '0')}</strong></div><div className="hud-stat"><label>명중률</label><strong data-testid="telemetry-accuracy">{stats.accuracy.toFixed(1)}%</strong></div><div className="hud-stat"><label>연속 명중</label><strong data-testid="telemetry-streak">{stats.streak.toString().padStart(2, '0')}</strong></div></div>
-         <div className={`hud-time ${timeLeft < 5 ? 'low' : ''}`}><label>남은 시간</label><strong data-testid="telemetry-time">{timeLeft.toFixed(1)}초</strong></div>
-        <CrosshairView config={settings.crosshair} className="crosshair-live" />
-        {drill === 'braking' && <div className="braking-guide"><b>브레이킹 · 헤드샷</b><span>A / D 이동 → 손을 떼거나 반대 입력 → 완전 정지 → 헤드라인 CLICK</span></div>}
-        {feedback && <div key={feedback.id} className={`hit-feedback ${feedback.miss ? 'miss' : ''}`}>{feedback.text}</div>}
-         {!pointerLocked && status === 'active' && <div className="pointer-lock-hint">클릭하여 시점 잠금 · 조준 시작</div>}
-         <div className="hud-bottom"><div className="move-hint"><span>이동</span><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>마우스 시점 / 클릭 사격</span></div><div className="range-status"><Gauge size={13} style={{ verticalAlign: 'middle', marginRight: 7 }} /> 표적 프로필: <b>{difficulty === 'trainee' ? '연습생' : difficulty === 'elite' ? '엘리트' : '요원'}</b></div></div>
+        <div className="hud-top">
+          <div className="hud-brand">
+            <b>SANGHYEON 01</b>
+            {' / '}
+            {drill === 'flick'
+              ? '플릭 조준'
+              : drill === 'tracking'
+                ? '트래킹 조준'
+                : '브레이킹'}
+            {' / 진행 중'}
+          </div>
+
+          <div className="hud-actions">
+            <button
+              className="hud-button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="훈련 설정 열기"
+              data-testid="button-range-settings"
+            >
+              <Settings2 size={16} />
+            </button>
+
+            <button
+              className="hud-button"
+              onClick={togglePause}
+              aria-label={
+                status === 'paused'
+                  ? '훈련 재개'
+                  : '훈련 일시정지'
+              }
+              data-testid="button-pause-run"
+            >
+              {status === 'paused' ? (
+                <Play size={16} />
+              ) : (
+                <Pause size={16} />
+              )}
+            </button>
+
+            <button
+              className="hud-button"
+              onClick={exit}
+              aria-label="훈련 종료"
+              data-testid="button-exit-run"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        </div>
+
+        <div className="hud-metrics">
+          <div className="hud-stat accent">
+            <label>점수</label>
+            <strong data-testid="telemetry-score">
+              {stats.score.toString().padStart(4, '0')}
+            </strong>
+          </div>
+
+          <div className="hud-stat">
+            <label>명중률</label>
+            <strong data-testid="telemetry-accuracy">
+              {stats.accuracy.toFixed(1)}%
+            </strong>
+          </div>
+
+          <div className="hud-stat">
+            <label>연속 명중</label>
+            <strong data-testid="telemetry-streak">
+              {stats.streak.toString().padStart(2, '0')}
+            </strong>
+          </div>
+        </div>
+
+        <div
+          className={`hud-time ${
+            timeLeft < 5 ? 'low' : ''
+          }`}
+        >
+          <label>남은 시간</label>
+          <strong data-testid="telemetry-time">
+            {timeLeft.toFixed(1)}초
+          </strong>
+        </div>
+
+        <CrosshairView
+          config={settings.crosshair}
+          className="crosshair-live"
+        />
+
+        {drill === 'braking' && (
+          <div className="braking-guide">
+            <b>브레이킹 · 카운터 스트레이프</b>
+            <span>
+              A / D 이동 후 반대 방향 입력으로 완전히 멈춘
+              뒤 조준선이 안정되면 CLICK
+            </span>
+          </div>
+        )}
+
+        {feedback && (
+          <div
+            key={feedback.id}
+            className={`hit-feedback ${
+              feedback.miss ? 'miss' : ''
+            }`}
+          >
+            {feedback.text}
+          </div>
+        )}
+
+        {!pointerLocked && status === 'active' && (
+          <div className="pointer-lock-hint">
+            클릭하여 시점 고정 · 조준 시작
+          </div>
+        )}
+
+        <div className="hud-bottom">
+          <div className="move-hint">
+            <span>이동</span>
+            <kbd>W</kbd>
+            <kbd>A</kbd>
+            <kbd>S</kbd>
+            <kbd>D</kbd>
+            <span>마우스 시점 / 클릭 사격</span>
+          </div>
+
+          <div className="range-status">
+            <Gauge
+              size={13}
+              style={{
+                verticalAlign: 'middle',
+                marginRight: 7,
+              }}
+            />
+            시작 프로토콜{' '}
+            <b>
+              {difficulty === 'trainee'
+                ? '연습생'
+                : difficulty === 'elite'
+                  ? '엘리트'
+                  : '요원'}
+            </b>
+          </div>
+        </div>
       </div>
-       {status === 'paused' && <div className="modal-dim"><div className="pause-modal"><Pause size={25} color="hsl(71 100% 61%)" /><h2>훈련 일시정지</h2><p>시간은 멈춰 있습니다. 준비가 되면 계속하세요.</p><div className="modal-actions"><button className="secondary-button" onClick={togglePause} data-testid="button-resume-run"><Play size={13} style={{ verticalAlign: 'middle', marginRight: 7 }} /> 계속하기</button><button className="danger-button" onClick={exit} data-testid="button-exit-paused">훈련 종료</button></div></div></div>}
-      {settingsOpen && <SettingsPanel settings={settings} onChange={onSettingsChange} onClose={() => setSettingsOpen(false)} />}
+
+      {status === 'paused' && (
+        <div className="modal-dim">
+          <div className="pause-modal">
+            <Pause
+              size={25}
+              color="hsl(71 100% 61%)"
+            />
+
+            <h2>훈련 일시정지</h2>
+
+            <p>
+              시간이 멈춰 있습니다. 준비가 되면 계속하세요.
+            </p>
+
+            <div className="modal-actions">
+              <button
+                className="secondary-button"
+                onClick={togglePause}
+                data-testid="button-resume-run"
+              >
+                <Play
+                  size={13}
+                  style={{
+                    verticalAlign: 'middle',
+                    marginRight: 7,
+                  }}
+                />
+                계속하기
+              </button>
+
+              <button
+                className="danger-button"
+                onClick={exit}
+                data-testid="button-exit-paused"
+              >
+                훈련 종료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          onChange={onSettingsChange}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }
+function SensitivityPage({
+  settings,
+  onChange,
+  onBack,
+}: {
+  settings: Settings;
+  onChange: (s: Settings) => void;
+  onBack: () => void;
+}) {
+  const [dpi, setDpi] = useState(800);
+  const [sens, setSens] = useState(
+    Number((settings.sensitivity * 0.35).toFixed(3)),
+  );
+  const [candidate, setCandidate] = useState<number | null>(null);
+  const [hits, setHits] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [target, setTarget] = useState({ x: 50, y: 50 });
 
-function SensitivityPage({ settings, onChange, onBack }: { settings: Settings; onChange: (s: Settings) => void; onBack: () => void }) {
-  const [dpi,setDpi]=useState(800);
-  const [sens,setSens]=useState(Number((settings.sensitivity*.35).toFixed(3)));
-  const [candidate,setCandidate]=useState<number|null>(null);
-  const [hits,setHits]=useState(0);
-  const [total,setTotal]=useState(0);
-  const [running,setRunning]=useState(false);
-  const [target,setTarget]=useState({x:50,y:50});
-  const edpi=dpi*sens;
-  const cm360=360/(0.022*dpi*sens);
-  const candidates=[.8,.9,1,1.1,1.2].map(m=>Number((sens*m).toFixed(3)));
-  const start=(v:number)=>{setCandidate(v);setHits(0);setTotal(0);setTarget({x:12+Math.random()*76,y:12+Math.random()*76});setRunning(true)};
-  const hit=()=>{if(!running)return;const t=total+1;setTotal(t);setHits(hits+1);if(t>=10)setRunning(false);else setTarget({x:12+Math.random()*76,y:12+Math.random()*76})};
-  return <main className="tool-page"><header className="tool-header"><button className="back-btn" onClick={onBack}>← LAB</button><div><p className="eyebrow">SENSITIVITY LAB // CALIBRATION</p><h1>감도 찾기</h1></div><div className="game-help">eDPI {Math.round(edpi)}</div></header><section className="tool-hero panel"><div><p className="eyebrow">MOUSE CALIBRATION</p><h2>내 손에 맞는 감도를 찾습니다.</h2><p>현재 DPI와 감도를 입력하고 후보 감도를 비교한 뒤 3D 훈련에 적용하세요.</p></div><div className="tool-hero-stats"><span><small>eDPI</small><b>{Math.round(edpi)}</b></span><span><small>CM / 360</small><b>{cm360.toFixed(1)}</b></span></div></section><section className="tool-grid sensitivity-grid"><article className="tool-card static"><b>DPI</b><input className="large-input" type="number" value={dpi} onChange={e=>setDpi(Number(e.target.value)||800)}/><span>마우스 DPI</span></article><article className="tool-card static"><b>VALORANT SENS</b><input className="large-input" type="number" min=".05" max="2" step=".01" value={sens} onChange={e=>setSens(Number(e.target.value)||.35)}/><span>게임 내 감도</span></article></section><section className="section"><div className="section-title"><div><p className="eyebrow">CANDIDATES</p><h2>후보 감도 비교</h2></div></div><div className="candidate-grid">{candidates.map(v=><button key={v} className={`candidate-card ${candidate===v?'selected':''}`} onClick={()=>start(v)}><small>{v===sens?'CURRENT':'CANDIDATE'}</small><strong>{v.toFixed(3)}</strong><span>eDPI {Math.round(dpi*v)}</span></button>)}</div></section><section className="section"><div className="section-title"><div><p className="eyebrow">MICRO TEST // 10 TARGETS</p><h2>{running?`테스트 진행 ${total}/10`:total>=10?'테스트 완료':'후보를 선택하세요'}</h2></div></div><div className="sensitivity-test panel">{running&&<button className="sensitivity-target" style={{left:`${target.x}%`,top:`${target.y}%`}} onClick={hit}/>} {!running&&<div className="sensitivity-test-empty">{total>=10?`선택 감도 ${candidate?.toFixed(3)} · 명중 ${hits}/${total}`:'위 후보 감도 중 하나를 눌러 10타겟 테스트를 시작하세요.'}</div>}</div>{candidate!==null&&!running&&total>=10&&<div className="setup-row"><div><span className="field-label">테스트 정확도</span><strong>{Math.round(hits/total*100)}%</strong></div><button className="start-button" onClick={()=>onChange({...settings,sensitivity:Math.max(.4,Math.min(2.4,candidate/.35))})}>이 감도를 3D에 적용</button></div>}</section></main>;
+  const edpi = dpi * sens;
+  const cm360 = 360 / (0.022 * dpi * sens);
+
+  const candidates = [0.8, 0.9, 1, 1.1, 1.2].map((m) =>
+    Number((sens * m).toFixed(3)),
+  );
+
+  const start = (value: number) => {
+    setCandidate(value);
+    setHits(0);
+    setTotal(0);
+    setTarget({
+      x: 12 + Math.random() * 76,
+      y: 12 + Math.random() * 76,
+    });
+    setRunning(true);
+  };
+
+  const hit = () => {
+    if (!running) return;
+
+    const nextTotal = total + 1;
+
+    setTotal(nextTotal);
+    setHits((value) => value + 1);
+
+    if (nextTotal >= 10) {
+      setRunning(false);
+    } else {
+      setTarget({
+        x: 12 + Math.random() * 76,
+        y: 12 + Math.random() * 76,
+      });
+    }
+  };
+
+  const applyCandidate = () => {
+    if (candidate === null) return;
+
+    onChange({
+      ...settings,
+      sensitivity: Math.max(
+        0.4,
+        Math.min(2.4, candidate / 0.35),
+      ),
+    });
+  };
+
+  return (
+    <main className="tool-page">
+      <header className="tool-header">
+        <button className="back-btn" onClick={onBack}>
+          AIM LAB
+        </button>
+
+        <div>
+          <p className="eyebrow">
+            SENSITIVITY LAB // CALIBRATION
+          </p>
+          <h1>감도 찾기</h1>
+        </div>
+
+        <div className="game-help">
+          eDPI {Math.round(edpi)}
+        </div>
+      </header>
+
+      <section className="tool-hero panel">
+        <div>
+          <p className="eyebrow">MOUSE CALIBRATION</p>
+
+          <h2>나에게 맞는 감도를 찾습니다.</h2>
+
+          <p>
+            현재 DPI와 감도를 입력하고 후보 감도를 비교한 뒤
+            3D 훈련에 적용하세요.
+          </p>
+        </div>
+
+        <div className="tool-hero-stats">
+          <span>
+            <small>eDPI</small>
+            <b>{Math.round(edpi)}</b>
+          </span>
+
+          <span>
+            <small>CM / 360</small>
+            <b>{cm360.toFixed(1)}</b>
+          </span>
+        </div>
+      </section>
+
+      <section className="tool-grid sensitivity-grid">
+        <article className="tool-card static">
+          <b>DPI</b>
+
+          <input
+            className="large-input"
+            type="number"
+            value={dpi}
+            onChange={(event) =>
+              setDpi(Number(event.target.value) || 800)
+            }
+          />
+
+          <span>마우스 DPI</span>
+        </article>
+
+        <article className="tool-card static">
+          <b>VALORANT SENS</b>
+
+          <input
+            className="large-input"
+            type="number"
+            min="0.05"
+            max="2"
+            step="0.01"
+            value={sens}
+            onChange={(event) =>
+              setSens(Number(event.target.value) || 0.35)
+            }
+          />
+
+          <span>게임 내 감도</span>
+        </article>
+      </section>
+
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">CANDIDATES</p>
+            <h2>후보 감도 비교</h2>
+          </div>
+        </div>
+
+        <div className="candidate-grid">
+          {candidates.map((value) => (
+            <button
+              key={value}
+              className={`candidate-card ${
+                candidate === value ? 'selected' : ''
+              }`}
+              onClick={() => start(value)}
+            >
+              <small>
+                {value === sens ? 'CURRENT' : 'CANDIDATE'}
+              </small>
+
+              <strong>{value.toFixed(3)}</strong>
+
+              <span>
+                eDPI {Math.round(dpi * value)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">
+              MICRO TEST // 10 TARGETS
+            </p>
+
+            <h2>
+              {running
+                ? `테스트 진행 ${total}/10`
+                : total >= 10
+                  ? '테스트 완료'
+                  : '후보를 선택하세요'}
+            </h2>
+          </div>
+        </div>
+
+        <div className="sensitivity-test panel">
+          {running && (
+            <button
+              className="sensitivity-target"
+              style={{
+                left: `${target.x}%`,
+                top: `${target.y}%`,
+              }}
+              onClick={hit}
+              aria-label="감도 테스트 타겟"
+            />
+          )}
+
+          {!running && (
+            <div className="sensitivity-test-empty">
+              {total >= 10
+                ? `선택 감도 ${candidate?.toFixed(3)} · 명중 ${hits}/${total}`
+                : '후보 감도를 하나 선택하면 10회 타겟 테스트가 시작됩니다.'}
+            </div>
+          )}
+        </div>
+
+        {candidate !== null && !running && total >= 10 && (
+          <div className="setup-row">
+            <div>
+              <span className="field-label">
+                테스트 정확도
+              </span>
+
+              <strong>
+                {Math.round((hits / total) * 100)}%
+              </strong>
+            </div>
+
+            <button
+              className="start-button"
+              onClick={applyCandidate}
+            >
+              이 감도를 3D에 적용
+            </button>
+          </div>
+        )}
+      </section>
+    </main>
+  );
 }
+function Results({
+  stats,
+  onAgain,
+  onHome,
+}: {
+  stats: RunStats;
+  onAgain: () => void;
+  onHome: () => void;
+}) {
+  const protocol =
+    stats.drill === 'flick'
+      ? '플릭 조준'
+      : stats.drill === 'tracking'
+        ? '트래킹 조준'
+        : '브레이킹';
 
-function GrowthPage({ history, onBack }: { history: HistoryItem[]; onBack: () => void }) {
-  const best=history.length?Math.max(...history.map(x=>x.score)):0;
-  const avg=history.length?Math.round(history.slice(0,7).reduce((a,b)=>a+b.score,0)/Math.min(7,history.length)):0;
-  const modules:Drill[]=['flick','tracking','braking'];
-  return <main className="tool-page"><header className="tool-header"><button className="back-btn" onClick={onBack}>← LAB</button><div><p className="eyebrow">PROGRESS DATABASE // DETAILED</p><h1>성장 기록</h1></div><div className="game-help">{history.length} SESSIONS</div></header><section className="growth-overview panel"><div><p className="eyebrow">WHAT AM I IMPROVING?</p><h2>점수 하나만 보지 않습니다.</h2><p>모듈별 최고 기록과 최근 기록을 분리해 성장 흐름을 확인합니다.</p></div><div className="growth-overview-stats"><span><small>SESSIONS</small><b>{history.length}</b></span><span><small>BEST</small><b>{best||'—'}</b></span><span><small>LAST 7 AVG</small><b>{avg||'—'}</b></span></div></section><section className="growth-cards">{modules.map(type=>{const rows=history.filter(x=>x.drill===type);const bestType=rows.length?Math.max(...rows.map(x=>x.score)):0;const last=rows[0];return <article className={`growth-module panel ${type}`} key={type}><div className="growth-module-head"><span>{type==='flick'?'🎯 FLICK':type==='tracking'?'◎ TRACKING':'↔ BRAKING'}</span><b>{rows.length}회</b></div><div className="growth-main"><strong>{bestType||'—'}</strong><small>BEST SCORE</small></div><div className="growth-detail-grid"><div><small>최근</small><b>{last?.score??'—'}</b></div><div><small>최근 정확도</small><b>{last?`${last.accuracy.toFixed(1)}%`:'—'}</b></div><div><small>최근 연속</small><b>{last?.streak??'—'}</b></div></div></article>})}</section><section className="growth-timeline panel">{history.length?history.map((r,i)=><div className="growth-row" key={`${r.date}-${r.score}-${i}`}><time>{r.date}</time><b>{r.drill.toUpperCase()}</b><strong>{r.score}</strong><span>{r.accuracy.toFixed(1)}% ACC · {r.hits??0}/{r.shots??0} HITS</span></div>):<div className="empty">아직 완료한 훈련이 없습니다.</div>}</section></main>;
+  return (
+    <div className="aim-app results-screen">
+      <div className="results-shell">
+        <div className="results-top">
+          <Brand />
+
+          <div className="results-kicker">
+            훈련 결과 / 3D AIM LAB
+          </div>
+        </div>
+
+        <div className="results-kicker">
+          {protocol} 훈련 완료
+        </div>
+
+        <h1 className="results-title">
+          기록
+          <br />
+          <span>저장되었습니다.</span>
+        </h1>
+
+        <p className="results-sub">
+          결과를 확인하고 다음 훈련에서 더 정밀하게
+          조준해보세요.
+        </p>
+
+        <div className="results-grid">
+          <div className="result-score">
+            <label>최종 점수</label>
+
+            <strong>
+              {stats.score.toLocaleString()}
+            </strong>
+
+            <small>
+              {stats.hits}회 명중 / {stats.shots}회 사격
+            </small>
+          </div>
+
+          <div className="result-metrics">
+            <div className="result-metric">
+              <label>명중률</label>
+              <strong>
+                {stats.accuracy.toFixed(1)}%
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>최고 연속 명중</label>
+              <strong>
+                {stats.streak
+                  .toString()
+                  .padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>훈련 시간</label>
+              <strong>
+                {stats.duration}초
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>프로토콜</label>
+              <strong>{protocol}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="result-actions">
+          <button
+            className="start-button"
+            onClick={onAgain}
+          >
+            <RotateCcw size={15} />
+            다시 훈련
+          </button>
+
+          <button
+            className="secondary-button"
+            onClick={onHome}
+          >
+            훈련 선택으로
+          </button>
+        </div>
+
+        <footer className="results-footer">
+          <span>
+            기록은 브라우저에 자동 저장됩니다
+          </span>
+
+          <span>
+            Sanghyeon / 3D Aim Lab
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
 }
+function GrowthPage({
+  history,
+  onBack,
+}: {
+  history: HistoryItem[];
+  onBack: () => void;
+}) {
+  const best = history.length
+    ? Math.max(...history.map((item) => item.score))
+    : 0;
 
-function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
-  const protocol = stats.drill === 'flick' ? '순간 조준' : stats.drill === 'tracking' ? '추적 조준' : '브레이킹';
-  return <div className="aim-app results-screen"><div className="results-shell"><div className="results-top"><Brand /><div className="results-kicker">훈련 결과 / 3D AIM LAB</div></div><div className="results-kicker">{protocol} 훈련 완료</div><h1 className="results-title">기록이<br /><span>저장되었습니다.</span></h1><p className="results-sub">결과를 확인하고 다음 훈련에서 더 정교하게 조준해보세요.</p><div className="results-grid"><div className="result-score"><label>최종 점수</label><strong>{stats.score.toLocaleString()}</strong><small>{stats.hits}회 명중 / {stats.shots}회 사격</small></div><div className="result-metrics"><div className="result-metric"><label>명중률</label><strong>{stats.accuracy.toFixed(1)}%</strong></div><div className="result-metric"><label>최고 연속</label><strong>{stats.streak.toString().padStart(2,'0')}</strong></div><div className="result-metric"><label>훈련 시간</label><strong>{stats.duration}초</strong></div><div className="result-metric"><label>프로토콜</label><strong>{protocol}</strong></div></div></div><div className="result-actions"><button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button><button className="secondary-button" onClick={onHome}>훈련 선택으로</button></div><footer className="results-footer"><span>기록은 이 브라우저에 자동 저장됩니다</span><span>Sanghyeon / 3D 에임랩</span></footer></div></div>;
+  const avg = history.length
+    ? Math.round(
+        history
+          .slice(0, 7)
+          .reduce((sum, item) => sum + item.score, 0) /
+          Math.min(7, history.length),
+      )
+    : 0;
+
+  const modules: Drill[] = [
+    'flick',
+    'tracking',
+    'braking',
+  ];
+
+  const moduleName = (type: Drill) => {
+    if (type === 'flick') return 'FLICK';
+    if (type === 'tracking') return 'TRACKING';
+    return 'BRAKING';
+  };
+
+  return (
+    <main className="tool-page">
+      <header className="tool-header">
+        <button className="back-btn" onClick={onBack}>
+          AIM LAB
+        </button>
+
+        <div>
+          <p className="eyebrow">
+            PROGRESS DATABASE // DETAILED
+          </p>
+
+          <h1>성장 기록</h1>
+        </div>
+
+        <div className="game-help">
+          {history.length} SESSIONS
+        </div>
+      </header>
+
+      <section className="growth-overview panel">
+        <div>
+          <p className="eyebrow">
+            WHAT AM I IMPROVING?
+          </p>
+
+          <h2>점수 하나만 보지 않습니다.</h2>
+
+          <p>
+            모드별 최고 기록과 최근 기록을 비교해서
+            훈련 흐름과 성장 추이를 확인합니다.
+          </p>
+        </div>
+
+        <div className="growth-overview-stats">
+          <span>
+            <small>SESSIONS</small>
+            <b>{history.length}</b>
+          </span>
+
+          <span>
+            <small>BEST</small>
+            <b>{best || '--'}</b>
+          </span>
+
+          <span>
+            <small>LAST 7 AVG</small>
+            <b>{avg || '--'}</b>
+          </span>
+        </div>
+      </section>
+
+      <section className="growth-cards">
+        {modules.map((type) => {
+          const rows = history.filter(
+            (item) => item.drill === type,
+          );
+
+          const bestType = rows.length
+            ? Math.max(...rows.map((item) => item.score))
+            : 0;
+
+          const last = rows[0];
+
+          return (
+            <article
+              className={`growth-module panel ${type}`}
+              key={type}
+            >
+              <div className="growth-module-head">
+                <span>{moduleName(type)}</span>
+                <b>{rows.length}회</b>
+              </div>
+
+              <div className="growth-main">
+                <strong>{bestType || '--'}</strong>
+                <small>BEST SCORE</small>
+              </div>
+
+              <div className="growth-detail-grid">
+                <div>
+                  <small>최근 점수</small>
+                  <b>{last?.score ?? '--'}</b>
+                </div>
+
+                <div>
+                  <small>최근 명중률</small>
+                  <b>
+                    {last
+                      ? `${last.accuracy.toFixed(1)}%`
+                      : '--'}
+                  </b>
+                </div>
+
+                <div>
+                  <small>최근 연속</small>
+                  <b>{last?.streak ?? '--'}</b>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="growth-timeline panel">
+        {history.length ? (
+          history.map((record, index) => (
+            <div
+              className="growth-row"
+              key={`${record.date}-${record.score}-${index}`}
+            >
+              <time>{record.date}</time>
+
+              <b>{record.drill.toUpperCase()}</b>
+
+              <strong>{record.score}</strong>
+
+              <span>
+                {record.accuracy.toFixed(1)}% ACC ·{' '}
+                {record.hits ?? 0}/{record.shots ?? 0} HITS
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="empty">
+            아직 완료한 훈련 기록이 없습니다.
+          </div>
+        )}
+      </section>
+    </main>
+  );
 }
 
 function HomeRoute() {
@@ -644,3 +1768,5 @@ function App() {
 }
 
 export default App;
+
+
