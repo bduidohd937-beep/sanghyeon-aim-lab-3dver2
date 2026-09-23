@@ -1786,3 +1786,41 @@ body {
   .facility-terminal-footer{align-items:stretch;flex-direction:column;}
   .terminal-launch{width:100%;}
 }
+
+/* Compact competitive FPS home screen */
+.aim-app{background:radial-gradient(ellipse at 52% 6%,rgba(81,112,97,.16),transparent 36%),#0b1012;color:#e9eee9}
+.app-header{height:76px;border-bottom:1px solid rgba(211,224,214,.09);background:rgba(10,15,16,.94);backdrop-filter:blur(16px)}
+.home-layout{width:min(1280px,calc(100% - 64px));grid-template-columns:minmax(0,1fr) 286px;gap:18px;padding:42px 0 72px;align-items:stretch}
+.home-main{padding:52px 48px 42px;border:1px solid rgba(211,224,214,.1);border-radius:16px;background:linear-gradient(140deg,rgba(23,31,31,.96),rgba(15,21,22,.98));box-shadow:0 26px 80px rgba(0,0,0,.28)}
+.home-hero{min-height:0;padding:0 0 36px;border-bottom:1px solid rgba(211,224,214,.1)}
+.home-hero .eyebrow{color:#9ab69f;font-size:10px;letter-spacing:.2em}
+.hero-title{font-size:clamp(60px,7vw,92px);line-height:.9;letter-spacing:-.03em;margin:22px 0 14px}
+.hero-title em{color:#c7d4b0;font-style:normal}
+.hero-copy{max-width:540px;color:#9aa7a0;font-size:14px;line-height:1.8}
+.facility-entry-button{min-width:260px;margin-top:24px;border:1px solid rgba(200,218,175,.35);border-radius:8px;background:linear-gradient(135deg,#586e5d,#34453b);box-shadow:0 10px 30px rgba(0,0,0,.24);font-weight:700}
+.facility-entry-button:hover{background:linear-gradient(135deg,#657e69,#405347)}
+.training-section{margin-top:32px}
+.training-section .section-title h2{font-size:29px;letter-spacing:-.03em}
+.phase{color:#87968c;font:10px var(--app-font-mono);letter-spacing:.12em}
+.drill-grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:11px;margin-top:16px}
+.drill-card{position:relative;overflow:hidden;min-height:174px;padding:17px;border:1px solid rgba(202,218,205,.12);border-radius:10px;background:linear-gradient(145deg,#1b2423,#131a1a);transition:transform .18s,border-color .18s,background .18s}
+.drill-card:before{content:"";position:absolute;top:0;left:16px;right:16px;height:2px;background:linear-gradient(90deg,transparent,#899c77,transparent);opacity:.5}
+.drill-card:hover{transform:translateY(-3px);border-color:rgba(195,214,171,.52);background:linear-gradient(145deg,#222f2b,#171f1e)}
+.drill-card.selected{border-color:rgba(195,214,171,.62);background:linear-gradient(145deg,#26352e,#18211e);box-shadow:inset 0 0 0 1px rgba(195,214,171,.08)}
+.drill-number,.drill-name{color:#aab9a5}
+.drill-icon{color:#d3dfc6}
+.drill-card h3{margin:12px 0 5px;font-size:20px}
+.drill-card p{color:#98a39c;font-size:11px;line-height:1.55}
+.drill-card-bottom{color:#c6d5b2;font:10px var(--app-font-mono);letter-spacing:.08em}
+.home-quick-actions{position:sticky;top:22px;align-self:start;padding:26px 20px;border:1px solid rgba(211,224,214,.1);border-radius:16px;background:linear-gradient(155deg,#171f1f,#101616);box-shadow:0 26px 80px rgba(0,0,0,.2)}
+.home-quick-actions .panel-kicker{color:#9ab69f;font:10px var(--app-font-mono);letter-spacing:.12em}
+.home-quick-actions .panel-title{margin:12px 0 18px;font-size:24px}
+.quick-action-grid{gap:8px}
+.quick-action-grid button{min-height:68px;grid-template-columns:34px 1fr auto;gap:10px;padding:11px;border-color:rgba(202,218,205,.1);border-radius:9px;background:rgba(255,255,255,.025)}
+.quick-action-grid button:hover{border-color:rgba(195,214,171,.42);background:rgba(111,139,113,.1)}
+.quick-action-grid button>span{width:30px;height:30px;border:1px solid rgba(202,218,205,.12);border-radius:7px;background:#202b27;color:#c4d4b6;font:10px var(--app-font-mono)}
+.quick-action-grid button strong{font-size:12px}
+.quick-action-grid button small{font-size:9px;color:#87958d}
+.quick-action-grid button>b{color:#c5d6b1;font-size:15px}
+@media(max-width:1000px){.home-layout{width:min(900px,calc(100% - 36px));grid-template-columns:1fr;padding-top:26px}.home-quick-actions{position:relative;top:auto;padding:22px}.quick-action-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.home-layout{width:calc(100% - 24px);gap:12px}.home-main{padding:30px 20px 26px}.hero-title{font-size:clamp(51px,14vw,72px)}.drill-grid{grid-template-columns:1fr}.drill-card{min-height:145px}.quick-action-grid{grid-template-columns:1fr}.phase{font-size:8px}}

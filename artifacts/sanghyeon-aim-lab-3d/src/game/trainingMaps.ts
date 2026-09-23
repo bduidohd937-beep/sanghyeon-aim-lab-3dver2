@@ -21,16 +21,16 @@ export const TRAINING_MAPS: TrainingMap[] = [
 ];
 
 const COLORS = {
-  floor: '#737b79',
-  floorDark: '#5c6462',
-  wall: '#b8b9b2',
-  wallLight: '#d3d1c8',
-  concrete: '#8b918d',
-  concreteDark: '#5a6262',
-  metal: '#3c494b',
-  trim: '#bb8d5d',
-  accent: '#b8d4bd',
-  hazard: '#c7a26b',
+  floor: '#414b49',
+  floorDark: '#293331',
+  wall: '#77827d',
+  wallLight: '#aab2aa',
+  concrete: '#596662',
+  concreteDark: '#35413f',
+  metal: '#394644',
+  trim: '#bd925f',
+  accent: '#a9c98f',
+  hazard: '#d0a45c',
 };
 
 function material(color: string, roughness = 0.82, metalness = 0.08) {
@@ -45,7 +45,7 @@ export function buildTrainingWorld(scene: THREE.Scene, mapId: TrainingMapId): Tr
   const lightWallMat = material(COLORS.wallLight, 0.72);
   const concreteMat = material(COLORS.concrete);
   const darkConcreteMat = material(COLORS.concreteDark, 0.74);
-  const metalMat = material(COLORS.metal, 0.4, 0.58);
+  const metalMat = material(COLORS.metal, 0.66, 0.14);
   const trimMat = material(COLORS.trim, 0.46, 0.32);
   const accentMat = new THREE.MeshStandardMaterial({
     color: COLORS.accent,
@@ -84,7 +84,7 @@ export function buildTrainingWorld(scene: THREE.Scene, mapId: TrainingMapId): Tr
     floor.receiveShadow = true;
     scene.add(floor);
 
-    const floorInset = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), material('#858b86', 0.92));
+    const floorInset = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), material('#505b56', 0.94));
     floorInset.rotation.x = -Math.PI / 2;
     floorInset.position.y = 0.008;
     floorInset.receiveShadow = true;
@@ -103,11 +103,31 @@ export function buildTrainingWorld(scene: THREE.Scene, mapId: TrainingMapId): Tr
     addBox([0.7, 8, 30], [14.65, 4, -1], wallMat, { collider: true, blocksShots: true });
     addBox([30, 0.5, 0.7], [0, 7.85, -1], concreteMat, { castShadow: false });
 
-    for (const x of [-12, -6, 0, 6, 12]) {
-      addBox([0.3, 0.32, 27], [x, 7.62, -1], metalMat, { castShadow: false });
+    // Architectural insets, kick plates and structural ribs break up the long blank walls.
+    addBox([29.25, 0.52, 0.075], [0, 0.3, -14.265], darkConcreteMat, { castShadow: false });
+    addBox([29.25, 0.16, 0.075], [0, 0.66, -14.265], trimMat, { castShadow: false });
+    addBox([0.075, 0.52, 28.8], [-14.265, 0.3, -1], darkConcreteMat, { castShadow: false });
+    addBox([0.075, 0.16, 28.8], [-14.265, 0.66, -1], trimMat, { castShadow: false });
+    addBox([0.075, 0.52, 28.8], [14.265, 0.3, -1], darkConcreteMat, { castShadow: false });
+    addBox([0.075, 0.16, 28.8], [14.265, 0.66, -1], trimMat, { castShadow: false });
+
+    for (const x of [-12, -8, -4, 4, 8, 12]) {
+      addBox([0.09, 3.0, 0.09], [x, 2.25, -14.245], metalMat, { castShadow: false });
+      addBox([2.4, 1.48, 0.045], [x + (x < 0 ? 1.8 : -1.8), 3.0, -14.245], darkConcreteMat, { castShadow: false });
     }
-    for (const z of [-12, -7, -2, 3, 8]) {
-      addBox([29, 0.2, 0.26], [0, 7.6, z], metalMat, { castShadow: false });
+
+    for (const z of [-11, -6, -1, 4, 8]) {
+      addBox([0.075, 2.65, 3.2], [-14.255, 3.35, z], darkConcreteMat, { castShadow: false });
+      addBox([0.06, 0.055, 3.35], [-14.21, 4.72, z], accentMat, { castShadow: false });
+      addBox([0.075, 2.65, 3.2], [14.255, 3.35, z], darkConcreteMat, { castShadow: false });
+      addBox([0.06, 0.055, 3.35], [14.21, 4.72, z], accentMat, { castShadow: false });
+    }
+
+    for (const x of [-12, 0, 12]) {
+      addBox([0.13, 0.16, 27], [x, 7.58, -1], metalMat, { castShadow: false });
+    }
+    for (const z of [-10, 0, 8]) {
+      addBox([29, 0.11, 0.14], [0, 7.56, z], metalMat, { castShadow: false });
       addBox([2.2, 0.055, 0.075], [0, 7.42, z], accentMat, { castShadow: false });
     }
 
@@ -119,20 +139,25 @@ export function buildTrainingWorld(scene: THREE.Scene, mapId: TrainingMapId): Tr
     }
 
     // Entry-side console, visible as the player faces the range.
-    addBox([1.55, 1.1, 0.72], [2.35, 0.55, 3.3], metalMat, { collider: true, blocksShots: true });
-    addBox([1.34, 0.08, 0.55], [2.35, 1.12, 3.24], trimMat, { castShadow: false });
-    addBox([0.92, 0.53, 0.045], [2.35, 1.48, 2.95], accentMat, { castShadow: false });
-    addBox([1.95, 0.12, 0.12], [2.35, 0.08, 5.4], hazardMat, { castShadow: false });
+    addBox([1.55, 1.1, 0.72], [12.65, 0.55, 5.5], metalMat, { collider: true, blocksShots: true });
+    addBox([1.34, 0.08, 0.55], [12.65, 1.12, 5.45], trimMat, { castShadow: false });
+    addBox([0.92, 0.53, 0.045], [12.65, 1.48, 5.12], accentMat, { castShadow: false });
+    addBox([1.95, 0.12, 0.12], [12.65, 0.08, 7.6], hazardMat, { castShadow: false });
   };
 
   const addCeilingLights = () => {
     for (const x of [-9, -3, 3, 9]) {
       for (const z of [-10, -4, 2, 8]) {
-        addBox([2.1, 0.055, 0.72], [x, 7.28, z], lightWallMat, { castShadow: false });
-        const light = new THREE.PointLight('#fff1d8', 7.5, 10, 1.7);
-        light.position.set(x, 6.85, z);
+        addBox([2.1, 0.07, 0.72], [x, 7.28, z], lightWallMat, { castShadow: false });
+        addBox([1.68, 0.025, 0.4], [x, 7.225, z], accentMat, { castShadow: false });
+        const light = new THREE.PointLight('#f5e5cb', 2.1, 8.5, 1.8);
+        light.position.set(x, 6.78, z);
         scene.add(light);
       }
+    }
+
+    for (const z of [-12, -7, -2, 3, 8]) {
+      addBox([0.14, 0.32, 28], [0, 7.08, z], metalMat, { castShadow: false });
     }
   };
 
@@ -158,6 +183,12 @@ export function buildTrainingWorld(scene: THREE.Scene, mapId: TrainingMapId): Tr
   if (mapId === 'range') {
     addMarkings();
     for (const x of [-10.5, -5.25, 0, 5.25, 10.5]) {
+      // Recessed target bays with a warm edge light and a durable lower strike plate.
+      addBox([3.8, 3.55, 0.09], [x, 2.72, -14.245], darkConcreteMat, { castShadow: false });
+      addBox([3.48, 3.22, 0.055], [x, 2.75, -14.17], concreteMat, { castShadow: false });
+      addBox([3.52, 0.045, 0.04], [x, 0.97, -14.125], trimMat, { castShadow: false });
+      addBox([0.055, 3.28, 0.045], [x - 1.76, 2.75, -14.12], metalMat, { castShadow: false });
+      addBox([0.055, 3.28, 0.045], [x + 1.76, 2.75, -14.12], metalMat, { castShadow: false });
       addBox([0.18, 4.5, 0.32], [x, 2.25, -13.35], darkConcreteMat, { blocksShots: true });
       addBox([1.1, 0.24, 0.7], [x, 0.12, -11.65], concreteMat, { blocksShots: true });
       addBox([0.96, 0.055, 0.045], [x, 0.27, -11.48], trimMat, { castShadow: false });

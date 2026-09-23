@@ -332,10 +332,10 @@ function Home({
   const drillInfo = {
     flick: { icon: '🎯', tag: '01', title: 'FLICK', korean: '정밀 전환', desc: '타겟이 나오면 바로 끌어가서 맞히는 기본 플릭 훈련.', active: true },
     reaction: { icon: '⚡', tag: '02', title: '시각반응', korean: '반응속도', desc: '언제 뜰지 모르는 신호를 보고 얼마나 빨리 반응하는지 확인.', active: false },
-    tracking: { icon: '◎', tag: '03', title: 'TRACKING', korean: '움직임 추적', desc: '움직이는 타겟을 놓치지 않고 따라가는 연습.', active: true },
-    braking: { icon: '↔', tag: '04', title: 'BRAKING', korean: '브레이킹', desc: 'A/D 반전으로 멈추고 바로 쏘는 감각을 잡는 훈련.', active: true },
-    switching: { icon: '🔀', tag: '05', title: 'SWITCHING', korean: '타겟 스위칭', desc: '하나 잡자마자 다음 타겟으로 얼마나 빨리 넘어가는지 본다.', active: false },
-    micro: { icon: '✦', tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '짧은 거리에서 오버슈트 없이 딱 붙여 맞히는 연습.', active: false },
+    tracking: { icon: '◎', tag: '02', title: 'TRACKING', korean: '움직임 추적', desc: '움직이는 타겟을 놓치지 않고 따라가는 연습.', active: true },
+    braking: { icon: '↔', tag: '03', title: 'BRAKING', korean: '브레이킹', desc: 'A/D 반전으로 멈추고 바로 쏘는 감각을 잡는 훈련.', active: true },
+    switching: { icon: '🔀', tag: '04', title: 'SWITCHING', korean: '타겟 스위칭', desc: '하나 잡자마자 다음 타겟으로 얼마나 빨리 넘어가는지 본다.', active: false },
+    micro: { icon: '✦', tag: '05', title: 'MICRO FLICK', korean: '미세 플릭', desc: '짧은 거리에서 오버슈트 없이 딱 붙여 맞히는 연습.', active: false },
   };
 
   return (
@@ -369,15 +369,15 @@ function Home({
             </div>
 
             <h1 className="hero-title">
-              경쟁하기 전
+              AIM TRAINING
               <br />
-              <em>손풀기.</em>
+              <em>START HERE.</em>
             </h1>
 
             <p className="hero-copy">
-              실제 1인칭 3D 공간에서
+              훈련할 모드를 고르고 시설로 바로 들어가세요.
               <br />
-              에임 감각을 빠르게 끌어올리세요.
+              세션과 장비 설정은 시설 터미널에서 조정할 수 있습니다.
             </p>
             <button className="facility-entry-button" onClick={onEnterRange}>
               훈련 시설 입장 <span>ENTER FACILITY ↗</span>
@@ -391,11 +391,11 @@ function Home({
                 <h2>훈련실</h2>
               </div>
 
-              <span className="phase">6 MODULES · PICK ONE</span>
+              <span className="phase">3 ACTIVE MODULES</span>
             </div>
 
             <div className="drill-grid">
-              {(Object.keys(drillInfo) as Drill[]).map((type) => {
+              {(Object.keys(drillInfo) as Drill[]).filter((type) => drillInfo[type].active).map((type) => {
                 const item = drillInfo[type];
                 const selected = drill === type;
 
@@ -444,25 +444,20 @@ function Home({
             <span>LAB CONTROL</span>
             <span>READY</span>
           </div>
-          <h2 className="panel-title">빠른 설정</h2>
+          <h2 className="panel-title">훈련 도구</h2>
           <div className="quick-action-grid">
-            <button onClick={onEnterRange}>
-              <span>🎯</span>
-              <div><strong>훈련 시설 입장</strong><small>터미널에서 훈련을 준비합니다</small></div>
-              <b>→</b>
-            </button>
             <button onClick={() => onNavigate('sensitivity')}>
-              <span>🖱️</span>
+              <span>01</span>
               <div><strong>감도 설정</strong><small>VALORANT 감도 / eDPI</small></div>
               <b>→</b>
             </button>
             <button onClick={() => onNavigate('growth')}>
-              <span>📊</span>
+              <span>02</span>
               <div><strong>연습 기록</strong><small>전체 세션과 성장 추이</small></div>
               <b>→</b>
             </button>
             <button onClick={() => onNavigate('crosshair')}>
-              <span>⚙️</span>
+              <span>03</span>
               <div><strong>설정</strong><small>조준선 / 훈련 표시</small></div>
               <b>→</b>
             </button>
@@ -781,6 +776,7 @@ function TrainingSetup({
       statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0 };
       setStats(statsRef.current);
       reactionSamplesRef.current = [];
+      targetSpawnAtRef.current = performance.now();
       timeRef.current = terminalDuration;
       setTimeLeft(terminalDuration);
       setFeedback(null);
@@ -815,20 +811,24 @@ function TrainingSetup({
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
       renderer.setSize(mount.clientWidth, mount.clientHeight);
-      renderer.shadowMap.enabled = true;
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+      renderer.toneMappingExposure = 1.12;
+      renderer.shadowMap.enabled = false;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       mount.appendChild(renderer.domElement);
-      scene.add(new THREE.HemisphereLight('#f4f2e8', '#4a4e4b', 2.15));
-      const key = new THREE.DirectionalLight('#ffe2bd', 2.5);
+      scene.background = new THREE.Color('#121817');
+      scene.fog = new THREE.FogExp2('#121817', 0.009);
+      scene.add(new THREE.HemisphereLight('#f3f0e5', '#27302f', 1.5));
+      const key = new THREE.DirectionalLight('#f4dfc0', 2.2);
       key.position.set(-7, 11, 8);
-      key.castShadow = true;
+      key.castShadow = false;
       key.shadow.mapSize.set(1024, 1024);
       key.shadow.camera.left = -18;
       key.shadow.camera.right = 18;
       key.shadow.camera.top = 18;
       key.shadow.camera.bottom = -18;
       scene.add(key);
-      scene.add(new THREE.AmbientLight('#dce5de', 0.48));
+      scene.add(new THREE.AmbientLight('#d5e0d7', 0.32));
       const world = buildTrainingWorld(scene, mapId);
       const HEADLINE_Y = 1.65;
       const HEADLINE_Z = -9.0;
@@ -847,27 +847,47 @@ function TrainingSetup({
 
       // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
       const weapon = new THREE.Group();
-      weapon.position.set(.34, -.27, -.72);
+      weapon.scale.setScalar(.46);
+      weapon.position.set(.24, -.2, -.8);
       weapon.rotation.set(-.03, -.03, -.02);
       const weaponBody = new THREE.Mesh(
-        new THREE.BoxGeometry(.24, .16, .55),
-        new THREE.MeshStandardMaterial({ color: '#20282c', roughness: .62, metalness: .55 })
+        new THREE.BoxGeometry(.2, .13, .39),
+        new THREE.MeshStandardMaterial({ color: '#46534f', roughness: .54, metalness: .48 })
       );
-      weaponBody.position.z = -.12;
+      weaponBody.position.set(0, 0, -.2);
       weapon.add(weaponBody);
-      const weaponGrip = new THREE.Mesh(
-        new THREE.BoxGeometry(.11, .25, .13),
-        new THREE.MeshStandardMaterial({ color: '#111719', roughness: .8, metalness: .1 })
+      const handguard = new THREE.Mesh(
+        new THREE.BoxGeometry(.155, .105, .3),
+        new THREE.MeshStandardMaterial({ color: '#303b38', roughness: .68, metalness: .25 })
       );
-      weaponGrip.position.set(.01, -.16, .04);
+      handguard.position.set(0, -.004, -.52);
+      weapon.add(handguard);
+      const stock = new THREE.Mesh(
+        new THREE.BoxGeometry(.18, .105, .22),
+        new THREE.MeshStandardMaterial({ color: '#35403c', roughness: .72, metalness: .12 })
+      );
+      stock.position.set(0, -.012, .11);
+      weapon.add(stock);
+      const magazine = new THREE.Mesh(
+        new THREE.BoxGeometry(.105, .2, .13),
+        new THREE.MeshStandardMaterial({ color: '#29332f', roughness: .76, metalness: .18 })
+      );
+      magazine.position.set(0, -.15, -.15);
+      magazine.rotation.x = -.12;
+      weapon.add(magazine);
+      const weaponGrip = new THREE.Mesh(
+        new THREE.BoxGeometry(.105, .2, .12),
+        new THREE.MeshStandardMaterial({ color: '#242e2b', roughness: .8, metalness: .1 })
+      );
+      weaponGrip.position.set(.015, -.145, -.005);
       weaponGrip.rotation.x = -.18;
       weapon.add(weaponGrip);
       const barrel = new THREE.Mesh(
-        new THREE.CylinderGeometry(.035, .035, .55, 12),
+        new THREE.CylinderGeometry(.022, .026, .42, 12),
         new THREE.MeshStandardMaterial({ color: '#090d0f', roughness: .4, metalness: .8 })
       );
       barrel.rotation.x = Math.PI / 2;
-      barrel.position.set(0, .01, -.57);
+      barrel.position.set(0, .006, -.82);
       weapon.add(barrel);
       const sight = new THREE.Mesh(
         new THREE.BoxGeometry(.055, .045, .16),
@@ -875,6 +895,12 @@ function TrainingSetup({
       );
       sight.position.set(0, .105, -.25);
       weapon.add(sight);
+      const frontSight = new THREE.Mesh(
+        new THREE.BoxGeometry(.035, .06, .035),
+        new THREE.MeshStandardMaterial({ color: '#8da77d', roughness: .42, metalness: .52 })
+      );
+      frontSight.position.set(0, .065, -.67);
+      weapon.add(frontSight);
       camera.add(weapon);
       scene.add(camera);
 
@@ -1007,12 +1033,14 @@ function TrainingSetup({
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
       const trackingState = { direction: 1, velocity: 0, timer: 0 };
+      let aimingWithMouse = false;
       let frame = 0;
       let previous = performance.now();
       let fpsFrames = 0;
       let fpsStarted = previous;
       const onPointerMove = (event: PointerEvent) => {
-        if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
+        const pointerLocked = document.pointerLockElement === renderer.domElement;
+        if (statusRef.current !== 'active' || (!pointerLocked && !aimingWithMouse)) return;
         const lookScale = THREE.MathUtils.degToRad(0.07) * sensitivityRef.current;
         yaw -= (event.movementX || 0) * lookScale;
         pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
@@ -1038,11 +1066,17 @@ function TrainingSetup({
       };
       const onShoot = (event: MouseEvent) => {
         if (statusRef.current !== 'active') return;
+        if (event.button !== 0) return;
         if (event.target !== renderer.domElement) return;
         event.preventDefault();
-        if (document.pointerLockElement !== renderer.domElement) return;
-
-        raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+        const rect = renderer.domElement.getBoundingClientRect();
+        const shotNdc = document.pointerLockElement === renderer.domElement
+          ? new THREE.Vector2(0, 0)
+          : new THREE.Vector2(
+            ((event.clientX - rect.left) / rect.width) * 2 - 1,
+            -((event.clientY - rect.top) / rect.height) * 2 + 1,
+          );
+        raycaster.setFromCamera(shotNdc, camera);
         const allTargetIntersections = targetRootRef.current
           ? raycaster.intersectObject(targetRootRef.current, true)
           : [];
@@ -1194,11 +1228,14 @@ function TrainingSetup({
         }
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.code); };
-      const onBlur = () => keys.clear();
+      const onBlur = () => { keys.clear(); aimingWithMouse = false; };
       const onPointerDown = (event: MouseEvent) => {
+        if (event.button !== 0) return;
         if (event.target !== renderer.domElement) return;
+        aimingWithMouse = true;
         if (statusRef.current === 'active') requestPointerLockSafe();
       };
+      const onPointerUp = () => { aimingWithMouse = false; };
       const onPointerLockChange = () => {
         const locked = document.pointerLockElement === renderer.domElement;
         setPointerLocked(locked);
@@ -1233,7 +1270,17 @@ function TrainingSetup({
         const accel = input.lengthSq() > 0 ? 28 : 22;
         const blend = 1 - Math.exp(-accel * Math.min(delta, .05));
         velocity.lerp(desired, blend);
-        camera.position.addScaledVector(velocity, delta);
+        const playerRadius = 0.34;
+        const collidesAt = (x: number, z: number) => world.colliders.some((collider) =>
+          x > collider.minX - playerRadius && x < collider.maxX + playerRadius &&
+          z > collider.minZ - playerRadius && z < collider.maxZ + playerRadius
+        );
+        const nextX = THREE.MathUtils.clamp(camera.position.x + velocity.x * delta, -14.05, 14.05);
+        if (!collidesAt(nextX, camera.position.z)) camera.position.x = nextX;
+        else velocity.x = 0;
+        const nextZ = THREE.MathUtils.clamp(camera.position.z + velocity.z * delta, -14.05, 9.05);
+        if (!collidesAt(camera.position.x, nextZ)) camera.position.z = nextZ;
+        else velocity.z = 0;
 
         if (!groundedRef.current) {
           jumpVelocityRef.current -= gravity * delta;
@@ -1248,23 +1295,6 @@ function TrainingSetup({
           camera.position.y += (targetEye - camera.position.y) * (1 - Math.exp(-18 * Math.min(delta, .05)));
         }
 
-        const playerRadius = 0.34;
-        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -14.05, 14.05);
-        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -14.05, 9.05);
-        for (const collider of world.colliders) {
-          const insideX = camera.position.x > collider.minX - playerRadius && camera.position.x < collider.maxX + playerRadius;
-          const insideZ = camera.position.z > collider.minZ - playerRadius && camera.position.z < collider.maxZ + playerRadius;
-          if (!insideX || !insideZ) continue;
-          const toLeft = camera.position.x - (collider.minX - playerRadius);
-          const toRight = collider.maxX + playerRadius - camera.position.x;
-          const toNear = camera.position.z - (collider.minZ - playerRadius);
-          const toFar = collider.maxZ + playerRadius - camera.position.z;
-          if (Math.min(toLeft, toRight) < Math.min(toNear, toFar)) {
-            camera.position.x += toLeft < toRight ? toLeft : -toRight;
-          } else {
-            camera.position.z += toNear < toFar ? toNear : -toFar;
-          }
-        }
       };
       // 최초 진입 시 타겟을 반드시 생성합니다.
       // Flick은 선택한 동시 소환 수만큼, Tracking/Braking은 1개를 생성합니다.
@@ -1283,8 +1313,10 @@ function TrainingSetup({
       document.addEventListener('mousemove', onPointerMove);
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
-      document.addEventListener('mousedown', onCanvasClick);
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+      renderer.domElement.addEventListener('mousedown', onCanvasClick);
       document.addEventListener('pointerlockchange', onPointerLockChange);
+      document.addEventListener('pointerup', onPointerUp);
 
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
@@ -1412,8 +1444,10 @@ function TrainingSetup({
         document.removeEventListener('mousemove', onPointerMove);
         document.removeEventListener('keydown', onKeyDown);
         document.removeEventListener('keyup', onKeyUp);
-        document.removeEventListener('mousedown', onCanvasClick);
+        renderer.domElement.removeEventListener('pointerdown', onPointerDown);
+        renderer.domElement.removeEventListener('mousedown', onCanvasClick);
         document.removeEventListener('pointerlockchange', onPointerLockChange);
+        document.removeEventListener('pointerup', onPointerUp);
         window.removeEventListener('blur', onBlur);
         window.removeEventListener('resize', resize);
         const disposedGeometry = new Set<THREE.BufferGeometry>();
