@@ -9,6 +9,7 @@ import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, 
 import * as THREE from 'three';
 
 type Drill = 'flick' | 'tracking' | 'braking';
+type FlickMode = 'random' | 'headline' | 'robot';
 type TrainingConfig = {
   drill: Drill;
   duration: number;
@@ -16,6 +17,7 @@ type TrainingConfig = {
   feedbackEnabled: boolean;
   aimCoach: boolean;
   flickBotCount: number;
+  flickMode: FlickMode;
 };
 type View =
   | 'home'
@@ -451,7 +453,7 @@ function Home({
 }: {
   settings: Settings;
   onSettings: () => void;
-  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean, flickBotCount?: number) => void;
+  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean, flickMode?: FlickMode, flickBotCount?: number) => void;
   history: HistoryItem[];
   onNavigate: (view: View) => void;
   onSettingsChange: (next: Settings) => void;
@@ -473,12 +475,12 @@ function Home({
   };
 
   const drillInfo = {
-    flick: { icon: <Crosshair size={30} />, tag: '01', title: 'FLICK', korean: '순간 조준', desc: '출현하는 타겟을 빠르게 포착하고 정확하게 클릭합니다.', active: true },
-    reaction: { icon: <Target size={30} />, tag: '02', title: 'REACTION', korean: '시각 반응', desc: '나타나는 순간을 보고 빠르게 반응합니다.', active: false },
-    tracking: { icon: <Target size={30} />, tag: '03', title: 'TRACKING', korean: '추적 조준', desc: '움직이는 타겟을 따라가며 안정적인 조준을 훈련합니다.', active: true },
-    braking: { icon: <Gauge size={30} />, tag: '04', title: 'BRAKING', korean: '감속 조준', desc: '이동을 멈추는 순간 정확하게 첫 발을 맞춥니다.', active: true },
-    switching: { icon: <Target size={30} />, tag: '05', title: 'SWITCHING', korean: '타겟 전환', desc: '여러 타겟 사이를 빠르고 정확하게 전환합니다.', active: false },
-    micro: { icon: <Crosshair size={30} />, tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 거리의 정밀한 조준 보정을 훈련합니다.', active: false },
+    flick: { icon: <Crosshair size={30} />, tag: '01', title: 'FLICK', korean: '정밀 전환', desc: '타겟이 나오면 바로 끌어가서 맞히는 기본 플릭 훈련.', active: true },
+    reaction: { icon: <Target size={30} />, tag: '02', title: '시각반응', korean: '반응속도', desc: '언제 뜰지 모르는 신호를 보고 얼마나 빨리 반응하는지 확인.', active: false },
+    tracking: { icon: <Target size={30} />, tag: '03', title: 'TRACKING', korean: '움직임 추적', desc: '움직이는 타겟을 놓치지 않고 따라가는 연습.', active: true },
+    braking: { icon: <Gauge size={30} />, tag: '04', title: 'BRAKING', korean: '브레이킹', desc: 'A/D 반전으로 멈추고 바로 쏘는 감각을 잡는 훈련.', active: true },
+    switching: { icon: <Crosshair size={30} />, tag: '05', title: 'SWITCHING', korean: '타겟 스위칭', desc: '하나 잡자마자 다음 타겟으로 얼마나 빨리 넘어가는지 본다.', active: false },
+    micro: { icon: <Crosshair size={30} />, tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '짧은 거리에서 오버슈트 없이 딱 붙여 맞히는 연습.', active: false },
   };
 
   return (
@@ -533,11 +535,11 @@ function Home({
           <section className="training-section">
             <div className="section-title">
               <div>
-                <p className="eyebrow">TRAINING ROOM</p>
-                <h2>훈련 선택</h2>
+                <p className="eyebrow">TRAINING MODULES</p>
+                <h2>훈련실</h2>
               </div>
 
-              <span className="phase">06 MODES</span>
+              <span className="phase">6 MODULES · PICK ONE</span>
             </div>
 
             <div className="drill-grid">
@@ -703,6 +705,8 @@ function TrainingSetup({
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [aimCoach, setAimCoach] = useState(false);
   const [flickBotCount, setFlickBotCount] = useState(3);
+  const [flickMode, setFlickMode] = useState<FlickMode>('random');
+  const [launchStep, setLaunchStep] = useState<null | 'count' | 'time'>(null);
 
   const drillInfo = {
     flick: {
@@ -801,6 +805,7 @@ function TrainingSetup({
                 } ${
                   item.id === 'hell' ? 'hell' : ''
                 }`}
+                style={difficulty === item.id ? { borderColor: item.id === 'trainee' ? '#62d5a0' : item.id === 'operator' ? '#42b7ff' : item.id === 'elite' ? '#ffb347' : '#c25cff', background: item.id === 'trainee' ? '#14231f' : item.id === 'operator' ? '#10212d' : item.id === 'elite' ? '#2b2114' : '#21152a' } : undefined}
                 onClick={() => setDifficulty(item.id)}
               >
                 <strong>{item.title}</strong>
@@ -824,70 +829,49 @@ function TrainingSetup({
           </div>
 
           <div className="mode-options">
+            {drill === 'flick' && (
+              <>
+                <div className="setup-section-head flick-mode-head">
+                  <span>02</span>
+                  <div><h2>TRAINING MODE</h2><p>어디를 맞힐지 선택해.</p></div>
+                </div>
+                {([
+                  ['random', 'RANDOM', '전방위', '화면 상하좌우에 구형 타겟이 랜덤 등장'],
+                  ['headline', 'HEADLINE', '헤드라인', '화면 중앙 높이에 로봇 타겟이 등장'],
+                  ['robot', 'ROBOT HEAD', '훈련봇', '훈련봇의 머리 중심을 정확히 클릭'],
+                ] as const).map(([id, title, label, desc]) => (
+                  <button key={id} type="button" className={`training-mode-card ${flickMode === id ? 'selected' : ''}`} onClick={() => setFlickMode(id)}>
+                    <span className="training-mode-index">{id === 'random' ? '01' : id === 'headline' ? '02' : '03'}</span>
+                    <span className="training-mode-copy"><strong>{title}</strong><b>{label}</b><small>{desc}</small></span>
+                    <span className="training-mode-check">{flickMode === id ? 'SELECTED' : '→'}</span>
+                  </button>
+                ))}
+              </>
+            )}
+          </div>
+        </section>
 
+        <section className="setup-section feedback-section">
+          <div className="setup-section-head">
+            <span>03</span>
+            <div><h2>FEEDBACK</h2><p>훈련 중 표시할 교정 기능을 선택하세요.</p></div>
+          </div>
+          <div className="mode-options">
             <button type="button" className={`mode-option ${feedbackEnabled ? 'selected' : ''}`} onClick={() => setFeedbackEnabled((value) => !value)}>
-              <div>
-                <strong>💬 전투 피드백</strong>
-                <span>명중·미스 점수를 화면에 표시합니다</span>
-              </div>
+              <div><strong>⚔️ 전투 피드백</strong><span>명중·미스 점수를 화면에 표시합니다.</span></div>
               <span className="option-on">{feedbackEnabled ? 'ON' : 'OFF'}</span>
             </button>
-
             <button type="button" className={`mode-option ${aimCoach ? 'selected' : ''}`} onClick={() => setAimCoach((value) => !value)}>
-              <div>
-                <strong>📐 에임 높이 교정</strong>
-                <span>훈련봇 머리 높이를 기준으로 조준을 교정합니다</span>
-              </div>
+              <div><strong>📐 에임 높이 교정</strong><span>헤드라인 높이를 기준으로 조준선을 교정합니다.</span></div>
               <span className="option-on">{aimCoach ? 'ON' : 'OFF'}</span>
             </button>
-
-            <div className="mode-option">
-              <div>
-                <strong>📍 랜덤 위치 생성</strong>
-                <span>
-                  구형 타겟만 생성 · 로봇은 벽 안쪽 바닥에 배치
-                </span>
-              </div>
-              <span className="option-on">ON</span>
-            </div>
-
-            <div className="mode-option">
-              <div>
-                <strong>🤖 로봇 타겟 생성</strong>
-                <span>
-                  훈련봇 헤드 히트박스를 실제 조준 타겟으로 사용
-                </span>
-              </div>
-              <span className="option-on">ON</span>
-            </div>
-
-            {drill === 'flick' && (
-              <div className="mode-option">
-                <div>
-                  <strong>🤖 플릭 훈련봇 동시 소환</strong>
-                  <span>벽을 넘지 않는 범위에서 바닥에 붙은 위치로 랜덤 배치</span>
-                </div>
-                <div className="bot-count-options">
-                  {[1, 3, 5, 8].map((count) => (
-                    <button
-                      key={count}
-                      type="button"
-                      className={flickBotCount === count ? 'selected' : ''}
-                      onClick={() => setFlickBotCount(count)}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
           </div>
+        </section>
         </section>
 
         <section className="setup-section compact">
           <div className="setup-section-head">
-            <span>03</span>
+            <span>04</span>
             <div>
               <h2>훈련 시간</h2>
               <p>한 세션의 길이를 선택하세요.</p>
@@ -921,21 +905,34 @@ function TrainingSetup({
             </strong>
           </div>
 
-          <button
-            className="setup-start"
-            onClick={() =>
-              onStart(
-                drill,
-                duration,
-                difficulty,
-                feedbackEnabled,
-                aimCoach,
-              )
-            }
-          >
-            훈련 시작
-            <span>→</span>
-          </button>
+          <button className="setup-start" onClick={() => setLaunchStep('count')}>훈련 시작 <span>→</span></button>
+          {launchStep && (
+            <div className="modal-dim setup-launch-dim">
+              <div className="pause-modal setup-launch-modal">
+                {launchStep === 'count' ? (
+                  <>
+                    <span className="launch-kicker">01 // TARGET COUNT</span><h2>동시 소환 타겟 수</h2>
+                    <p>선택한 수만큼 동시에 존재하며, 명중하면 즉시 새 타겟이 보충됩니다.</p>
+                    <div className="launch-choice-grid">
+                      {[1, 3, 5, 7, 12].map((count) => <button key={count} className={flickBotCount === count ? 'selected' : ''} onClick={() => { setFlickBotCount(count); setLaunchStep('time'); }}>{count}<small>TARGETS</small></button>)}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <span className="launch-kicker">02 // TRAINING TIME</span><h2>훈련 시간</h2>
+                    <p>이번 세션의 훈련 시간을 선택하세요.</p>
+                    <div className="launch-choice-grid time">
+                      {[15, 30, 60].map((time) => <button key={time} className={duration === time ? 'selected' : ''} onClick={() => setDuration(time)}>{time}<small>SEC</small></button>)}
+                    </div>
+                    <div className="modal-actions">
+                      <button className="secondary-button" onClick={() => setLaunchStep('count')}>← 이전</button>
+                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach, flickMode, flickBotCount); }}>훈련 시작 →</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
       </main>
@@ -943,7 +940,7 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
@@ -1083,231 +1080,84 @@ function TrainingSetup({
       };
 
       const brakingStopThreshold = .16;
+      const isPositionClear = (x: number, y: number, z: number, radius: number) => {
+        const candidate = new THREE.Vector3(x, y, z);
+        for (const child of group.children) {
+          const existingRadius = child.userData.targetRadius ?? 0.5;
+          if (candidate.distanceTo(child.position) < radius + existingRadius + 0.18) return false;
+        }
+        return true;
+      };
+      const findFlickPosition = (radius: number) => {
+        for (let attempt = 0; attempt < 80; attempt += 1) {
+          const ndcX = THREE.MathUtils.randFloat(-0.86, 0.86);
+          const ndcY = THREE.MathUtils.randFloat(-0.72, 0.72);
+          const distance = THREE.MathUtils.randFloat(7.2, 12);
+          const direction = new THREE.Vector3(ndcX, ndcY, -1).unproject(camera).sub(camera.position).normalize();
+          const point = camera.position.clone().addScaledVector(direction, distance);
+          point.x = THREE.MathUtils.clamp(point.x, -11.3 + radius, 11.3 - radius);
+          point.y = THREE.MathUtils.clamp(point.y, 0.9, 4.9);
+          point.z = THREE.MathUtils.clamp(point.z, -9.9, -1.8);
+          if (isPositionClear(point.x, point.y, point.z, radius)) return point;
+        }
+        return new THREE.Vector3(0, 1.65, -8);
+      };
+      const findRobotPosition = (radius: number) => {
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          const x = THREE.MathUtils.randFloat(-11, 11);
+          const z = THREE.MathUtils.randFloat(-9.15, -2.2);
+          if (isPositionClear(x, 0, z, radius)) return new THREE.Vector3(x, 0, z);
+        }
+        return new THREE.Vector3(0, 0, -8);
+      };
+      const buildRobot = () => {
+        const root = new THREE.Group();
+        const armorMat = new THREE.MeshStandardMaterial({ color: '#2b2d35', roughness: .4, metalness: .8 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: .6, metalness: .9 });
+        const redAccentMat = new THREE.MeshStandardMaterial({ color: '#ff4655', emissive: '#ff2222', emissiveIntensity: .8, roughness: .3 });
+        const whiteHeadMat = new THREE.MeshStandardMaterial({ color: '#dce2eb', roughness: .2, metalness: .5, emissive: '#88aacc', emissiveIntensity: .2 });
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,.15,8),darkMat); neck.name='body'; neck.position.y=1.47;
+        const head = new THREE.Mesh(new THREE.BoxGeometry(.24,.28,.24),whiteHeadMat); head.name='head'; head.position.y=1.65;
+        const headTop = new THREE.Mesh(new THREE.BoxGeometry(.20,.05,.22),redAccentMat); headTop.name='body'; headTop.position.set(0,.15,0); head.add(headTop);
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(.55,.5,.3),armorMat); torso.name='body'; torso.position.y=1.15;
+        const chestCore = new THREE.Mesh(new THREE.SphereGeometry(.08,16,16),redAccentMat); chestCore.name='body'; chestCore.position.set(0,1.15,.16);
+        const shoulderL = new THREE.Mesh(new THREE.BoxGeometry(.22,.15,.25),redAccentMat); shoulderL.name='body'; shoulderL.position.set(-.38,1.35,0);
+        const shoulderR = new THREE.Mesh(new THREE.BoxGeometry(.22,.15,.25),redAccentMat); shoulderR.name='body'; shoulderR.position.set(.38,1.35,0);
+        const gunBody = new THREE.Mesh(new THREE.BoxGeometry(.07,.12,.4),armorMat); gunBody.name='body'; gunBody.position.set(.08,1.05,.58);
+        const rightUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.35,8),armorMat); rightUpperArm.name='body'; rightUpperArm.position.set(.28,1.2,.18); rightUpperArm.rotation.x=-1.1;
+        const rightLowerArm = new THREE.Mesh(new THREE.CylinderGeometry(.045,.04,.35,8),armorMat); rightLowerArm.name='body'; rightLowerArm.position.set(.15,1.06,.42); rightLowerArm.rotation.x=-1.5;
+        const leftUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.35,8),armorMat); leftUpperArm.name='body'; leftUpperArm.position.set(-.28,1.2,.18); leftUpperArm.rotation.x=-1.1;
+        const leftLowerArm = new THREE.Mesh(new THREE.CylinderGeometry(.045,.04,.35,8),armorMat); leftLowerArm.name='body'; leftLowerArm.position.set(.02,1.06,.44); leftLowerArm.rotation.x=-1.5; leftLowerArm.rotation.y=-.2;
+        const waist = new THREE.Mesh(new THREE.CylinderGeometry(.12,.15,.2,8),darkMat); waist.name='body'; waist.position.y=.85;
+        const hips = new THREE.Mesh(new THREE.BoxGeometry(.45,.2,.25),armorMat); hips.name='body'; hips.position.y=.7;
+        const thighL = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighL.name='body'; thighL.position.set(-.15,.4,0); thighL.rotation.z=-.1;
+        const thighR = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighR.name='body'; thighR.position.set(.15,.4,0); thighR.rotation.z=.1;
+        const calfL = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfL.name='body'; calfL.position.set(-.18,.225,.05);
+        const calfR = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfR.name='body'; calfR.position.set(.18,.225,-.05);
+        root.add(neck,head,torso,chestCore,shoulderL,shoulderR,gunBody,rightUpperArm,rightLowerArm,leftUpperArm,leftLowerArm,waist,hips,thighL,thighR,calfL,calfR);
+        root.userData.targetRadius=.72; root.userData.head=head;
+        root.traverse((object)=>{if(object instanceof THREE.Mesh)object.castShadow=true;});
+        return root;
+      };
       const spawn = () => {
         targetSpawnAtRef.current = performance.now();
-        if (targetRootRef.current) group.remove(targetRootRef.current);
-        const root = new THREE.Group();
-
-        const botScale = 1.0;
-        const armorMat = new THREE.MeshStandardMaterial({
-          color: '#2b2d35',
-          roughness: 0.4,
-          metalness: 0.8,
-        });
-        const darkMat = new THREE.MeshStandardMaterial({
-          color: '#15171a',
-          roughness: 0.6,
-          metalness: 0.9,
-        });
-        const redAccentMat = new THREE.MeshStandardMaterial({
-          color: '#ff4655',
-          emissive: '#ff2222',
-          emissiveIntensity: 0.8,
-          roughness: 0.3,
-        });
-        const whiteHeadMat = new THREE.MeshStandardMaterial({
-          color: '#dce2eb',
-          roughness: 0.2,
-          metalness: 0.5,
-          emissive: '#88aacc',
-          emissiveIntensity: 0.2,
-        });
-
-        // 모든 모드에서 동일한 로봇 타겟을 사용합니다.
-        // FLICK만 여러 대를 동시에 소환할 수 있으며, 각 로봇은 바닥에 붙은 채
-        // 좌우 벽과 후면 벽 안쪽의 랜덤 X/Z 위치에 생성됩니다.
-
-        // VALORANT-style training bot model.
-        const neck = new THREE.Mesh(
-          new THREE.CylinderGeometry(.08 * botScale, .1 * botScale, .15 * botScale, 8),
-          darkMat
-        );
-        neck.name = 'body';
-        neck.position.y = 1.47;
-
-        const head = new THREE.Mesh(
-          new THREE.BoxGeometry(.24 * botScale, .28 * botScale, .24 * botScale),
-          whiteHeadMat
-        );
-        head.name = 'head';
-        head.position.y = 1.65;
-
-        const headTop = new THREE.Mesh(
-          new THREE.BoxGeometry(.20 * botScale, .05 * botScale, .22 * botScale),
-          redAccentMat
-        );
-        headTop.name = 'body';
-        headTop.position.set(0, .15 * botScale, 0);
-        head.add(headTop);
-
-        const torso = new THREE.Mesh(
-          new THREE.BoxGeometry(.55 * botScale, .5 * botScale, .3 * botScale),
-          armorMat
-        );
-        torso.name = 'body';
-        torso.position.y = 1.15;
-
-        const chestCore = new THREE.Mesh(
-          new THREE.SphereGeometry(.08 * botScale, 16, 16),
-          redAccentMat
-        );
-        chestCore.name = 'body';
-        chestCore.position.set(0, 1.15, .16);
-
-        const shoulderL = new THREE.Mesh(
-          new THREE.BoxGeometry(.22 * botScale, .15 * botScale, .25 * botScale),
-          redAccentMat
-        );
-        shoulderL.name = 'body';
-        shoulderL.position.set(-.38 * botScale, 1.35, 0);
-
-        const shoulderR = new THREE.Mesh(
-          new THREE.BoxGeometry(.22 * botScale, .15 * botScale, .25 * botScale),
-          redAccentMat
-        );
-        shoulderR.name = 'body';
-        shoulderR.position.set(.38 * botScale, 1.35, 0);
-
-        const gunBody = new THREE.Mesh(
-          new THREE.BoxGeometry(.07 * botScale, .12 * botScale, .4 * botScale),
-          armorMat
-        );
-        gunBody.name = 'body';
-        gunBody.position.set(.08 * botScale, 1.05, .58 * botScale);
-
-        const rightUpperArm = new THREE.Mesh(
-          new THREE.CylinderGeometry(.05 * botScale, .05 * botScale, .35 * botScale, 8),
-          armorMat
-        );
-        rightUpperArm.name = 'body';
-        rightUpperArm.position.set(.28 * botScale, 1.2, .18 * botScale);
-        rightUpperArm.rotation.x = -1.1;
-
-        const rightLowerArm = new THREE.Mesh(
-          new THREE.CylinderGeometry(.045 * botScale, .04 * botScale, .35 * botScale, 8),
-          armorMat
-        );
-        rightLowerArm.name = 'body';
-        rightLowerArm.position.set(.15 * botScale, 1.06, .42 * botScale);
-        rightLowerArm.rotation.x = -1.5;
-
-        const leftUpperArm = new THREE.Mesh(
-          new THREE.CylinderGeometry(.05 * botScale, .05 * botScale, .35 * botScale, 8),
-          armorMat
-        );
-        leftUpperArm.name = 'body';
-        leftUpperArm.position.set(-.28 * botScale, 1.2, .18 * botScale);
-        leftUpperArm.rotation.x = -1.1;
-
-        const leftLowerArm = new THREE.Mesh(
-          new THREE.CylinderGeometry(.045 * botScale, .04 * botScale, .35 * botScale, 8),
-          armorMat
-        );
-        leftLowerArm.name = 'body';
-        leftLowerArm.position.set(.02 * botScale, 1.06, .44 * botScale);
-        leftLowerArm.rotation.x = -1.5;
-        leftLowerArm.rotation.y = -.2;
-
-        const waist = new THREE.Mesh(
-          new THREE.CylinderGeometry(.12 * botScale, .15 * botScale, .2 * botScale, 8),
-          darkMat
-        );
-        waist.name = 'body';
-        waist.position.y = .85;
-
-        const hips = new THREE.Mesh(
-          new THREE.BoxGeometry(.45 * botScale, .2 * botScale, .25 * botScale),
-          armorMat
-        );
-        hips.name = 'body';
-        hips.position.y = .7;
-
-        const thighL = new THREE.Mesh(
-          new THREE.CylinderGeometry(.08 * botScale, .06 * botScale, .45 * botScale, 8),
-          armorMat
-        );
-        thighL.name = 'body';
-        thighL.position.set(-.15 * botScale, .4, 0);
-        thighL.rotation.z = -.1;
-
-        const thighR = new THREE.Mesh(
-          new THREE.CylinderGeometry(.08 * botScale, .06 * botScale, .45 * botScale, 8),
-          armorMat
-        );
-        thighR.name = 'body';
-        thighR.position.set(.15 * botScale, .4, 0);
-        thighR.rotation.z = .1;
-
-        const calfL = new THREE.Mesh(
-          new THREE.CylinderGeometry(.06 * botScale, .05 * botScale, .45 * botScale, 8),
-          darkMat
-        );
-        calfL.name = 'body';
-        calfL.position.set(-.18 * botScale, .225, .05 * botScale);
-
-        const calfR = new THREE.Mesh(
-          new THREE.CylinderGeometry(.06 * botScale, .05 * botScale, .45 * botScale, 8),
-          darkMat
-        );
-        calfR.name = 'body';
-        calfR.position.set(.18 * botScale, .225, -.05 * botScale);
-
-        root.add(
-          neck,
-          head,
-          torso,
-          chestCore,
-          shoulderL,
-          shoulderR,
-          gunBody,
-          rightUpperArm,
-          rightLowerArm,
-          leftUpperArm,
-          leftLowerArm,
-          waist,
-          hips,
-          thighL,
-          thighR,
-          calfL,
-          calfR
-        );
-
-        // FLICK: 바닥에 고정된 상태로 벽 안쪽 X/Z를 랜덤 배치.
-        // 로봇 발이 y=0에 닿도록 root.y는 0으로 둡니다.
         if (drill === 'flick') {
-          const randomX = THREE.MathUtils.randFloat(-11.5, 11.5);
-          const randomZ = THREE.MathUtils.randFloat(-9.35, -2.0);
-          root.position.set(randomX, 0, randomZ);
-        } else if (drill === 'braking') {
-          const robotRootY = HEADLINE_Y - head.position.y;
-          root.position.set(
-            (Math.random() - .5) * 8.0,
-            robotRootY,
-            -8.0 - Math.random() * 1.5
-          );
-        } else {
-          const robotRootY = HEADLINE_Y - head.position.y;
-          root.position.set(0, robotRootY, -9.0);
+          const root = flickMode === 'random' ? new THREE.Group() : buildRobot();
+          if (flickMode === 'random') {
+            const radius=difficultySize;
+            const sphere=new THREE.Mesh(new THREE.SphereGeometry(radius,24,24),new THREE.MeshStandardMaterial({color:'#ff4655',emissive:'#7a111b',emissiveIntensity:.55,roughness:.35,metalness:.25}));
+            sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.position.copy(findFlickPosition(radius));
+          } else {
+            const pos=findRobotPosition(.72); root.position.set(pos.x,HEADLINE_Y-1.65,pos.z);
+          }
+          group.add(root); targetRootRef.current=group; targetMeshRef.current=null; return;
         }
-
-        root.traverse((object) => {
-          if (object instanceof THREE.Mesh) object.castShadow = true;
-        });
-        group.add(root);
-        targetRootRef.current = root;
-        targetMeshRef.current = head;
-        brakingMovedRef.current = false;
+        if (targetRootRef.current) group.remove(targetRootRef.current);
+        const root=buildRobot(); const robotRootY=HEADLINE_Y-1.65;
+        if(drill==='braking') root.position.set((Math.random()-.5)*8,robotRootY,-8-Math.random()*1.5);
+        else root.position.set(0,robotRootY,-9);
+        group.add(root); targetRootRef.current=root; targetMeshRef.current=root.userData.head as THREE.Mesh; brakingMovedRef.current=false;
       };
-
-      // FLICK은 여러 로봇을 동시에 배치합니다. 나머지 모드는 1대만 생성합니다.
-      if (drill === 'flick') {
-        for (let i = 0; i < flickBotCount; i += 1) spawn();
-        targetRootRef.current = group;
-        targetMeshRef.current = null;
-      } else {
-        spawn();
-      }
-
       const raycaster = new THREE.Raycaster();
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
@@ -1331,13 +1181,20 @@ function TrainingSetup({
           ? raycaster.intersectObject(targetRootRef.current, true)
           : [];
 
+        const hitObject = intersections[0]?.object ?? null;
         const hitHead = intersections.find((item) =>
           drill === 'flick'
-            ? item.object.name === 'head'
+            ? (flickMode === 'random' ? item.object.name === 'target' : item.object.name === 'head')
             : item.object === targetMeshRef.current
         );
         const headHit = Boolean(hitHead);
         const bodyHit = intersections.length > 0 && !headHit;
+        let hitRoot: THREE.Object3D | null = null;
+        if (hitObject) {
+          let cursor: THREE.Object3D | null = hitObject;
+          while (cursor && cursor.parent && cursor.parent !== group) cursor = cursor.parent;
+          hitRoot = cursor && cursor.parent === group ? cursor : null;
+        }
         const reaction = performance.now() - targetSpawnAtRef.current;
         if (drill === 'flick' && Number.isFinite(reaction)) {
           reactionSamplesRef.current.push(reaction);
@@ -1417,8 +1274,16 @@ function TrainingSetup({
             id: Date.now(),
           });
 
-          if (drill === 'flick' && hitHead?.object.parent) {
-            group.remove(hitHead.object.parent);
+          if (drill === 'flick' && hitRoot) {
+            group.remove(hitRoot);
+            hitRoot.traverse((object) => {
+              if (object instanceof THREE.Mesh) {
+                object.geometry.dispose();
+                const material = object.material;
+                if (Array.isArray(material)) material.forEach((m) => m.dispose());
+                else material.dispose();
+              }
+            });
             spawn();
             targetRootRef.current = group;
             targetMeshRef.current = null;
@@ -1590,7 +1455,7 @@ function TrainingSetup({
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
         cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount]);
+    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode]);
 
     useEffect(() => {
       const timer = window.setInterval(() => {
@@ -2367,10 +2232,10 @@ function TrainingSetup({
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3 });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random' });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
-    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount }); setView('range'); };
+    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
