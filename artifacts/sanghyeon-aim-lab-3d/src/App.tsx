@@ -1511,22 +1511,63 @@ function TrainingSetup({
               }
             }
 
-            const headlineScreen = new THREE.Vector3(
-              headlineX,
-              HEADLINE_Y,
-              HEADLINE_Z,
-            ).project(camera);
-            const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
             const crosshairY = screenHeight * .5;
-            const pixelPadding = 4;
-            const deltaY = crosshairY - headlineYpx;
+            const crosshairX = renderer.domElement.clientWidth * .5;
+            let headlineTopPx: number | null = null;
+            let headlineBottomPx: number | null = null;
 
+            // 로봇은 실제 헤드 히트박스 높이 전체를 HEADLINE 판정 범위로 사용한다.
+            // 그래서 조준선이 머리 중앙에서 몇 px만 벗어나도 바로 경고하지 않고,
+            // 실제로 머리에 맞을 수 있는 위/아래 영역 안에서는 OK로 처리한다.
+            const coachHead = targetMeshRef.current;
+            const coachRoot = targetRootRef.current;
+            if (
+              coachHead &&
+              coachRoot &&
+              coachHead.name === 'head' &&
+              drill !== 'flick'
+            ) {
+              const headWorld = new THREE.Vector3();
+              coachHead.getWorldPosition(headWorld);
+
+              const headHalfHeight = 0.14;
+              const topWorld = new THREE.Vector3(
+                headWorld.x,
+                headWorld.y + headHalfHeight,
+                headWorld.z,
+              );
+              const bottomWorld = new THREE.Vector3(
+                headWorld.x,
+                headWorld.y - headHalfHeight,
+                headWorld.z,
+              );
+
+              const topScreen = topWorld.project(camera);
+              const bottomScreen = bottomWorld.project(camera);
+              const topPx = (1 - topScreen.y) * .5 * screenHeight;
+              const bottomPx = (1 - bottomScreen.y) * .5 * screenHeight;
+
+              headlineTopPx = Math.min(topPx, bottomPx);
+              headlineBottomPx = Math.max(topPx, bottomPx);
+            } else {
+              const headlineScreen = new THREE.Vector3(
+                headlineX,
+                HEADLINE_Y,
+                HEADLINE_Z,
+              ).project(camera);
+              const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
+              const headlinePadding = 6;
+              headlineTopPx = headlineYpx - headlinePadding;
+              headlineBottomPx = headlineYpx + headlinePadding;
+            }
+
+            const hitboxPadding = 2;
             const nextAimState: 'low' | 'high' | 'ok' =
-              Math.abs(deltaY) <= pixelPadding
-                ? 'ok'
-                : deltaY < 0
-                  ? 'high'
-                  : 'low';
+              crosshairY < (headlineTopPx as number) - hitboxPadding
+                ? 'high'
+                : crosshairY > (headlineBottomPx as number) + hitboxPadding
+                  ? 'low'
+                  : 'ok';
 
             setAimCoachState(nextAimState);
             setAimCoachWarning(nextAimState !== 'ok');
