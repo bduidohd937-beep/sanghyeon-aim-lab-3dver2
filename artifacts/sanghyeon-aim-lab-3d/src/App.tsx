@@ -9,7 +9,7 @@ import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, 
 import * as THREE from 'three';
 import { CROSSHAIR_PRESETS, DEFAULT_CROSSHAIR, DEFAULT_KEYBINDS, DEFAULT_SETTINGS, normalizeSettings, WEAPONS } from './game/config';
 import { TRAINING_MAPS, buildTrainingWorld } from './game/trainingMaps';
-import type { CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId } from './game/types';
+import type { BotBehavior, CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId } from './game/types';
 import { readStorage, saveStorage } from './persistence/storage';
 
 const queryClient = new QueryClient();
@@ -710,7 +710,7 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, customTargetSize = 0.4, customTargetSpeed = 1, mapId, onMapChange, onConfigChange, onLeave, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; customTargetSize?: number; customTargetSpeed?: number; mapId: TrainingMapId; onMapChange: (map: TrainingMapId) => void; onConfigChange: (config: TrainingConfig) => void; onLeave: () => void; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, customTargetSize = 0.4, customTargetSpeed = 1, botBehavior = 'peek', peekCueEnabled = true, damageModelEnabled = true, mapId, onMapChange, onConfigChange, onLeave, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; customTargetSize?: number; customTargetSpeed?: number; botBehavior?: BotBehavior; peekCueEnabled?: boolean; damageModelEnabled?: boolean; mapId: TrainingMapId; onMapChange: (map: TrainingMapId) => void; onConfigChange: (config: TrainingConfig) => void; onLeave: () => void; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
@@ -731,6 +731,9 @@ function TrainingSetup({
     const [terminalTargetCount, setTerminalTargetCount] = useState(flickBotCount);
     const [terminalTargetSize, setTerminalTargetSize] = useState(customTargetSize);
     const [terminalTargetSpeed, setTerminalTargetSpeed] = useState(customTargetSpeed);
+    const [terminalBotBehavior, setTerminalBotBehavior] = useState<BotBehavior>(botBehavior);
+    const [terminalPeekCue, setTerminalPeekCue] = useState(peekCueEnabled);
+    const [terminalDamageModel, setTerminalDamageModel] = useState(damageModelEnabled);
     const [hasStarted, setHasStarted] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
     const pointerLockBlockedUntilRef = useRef(0);
@@ -741,7 +744,7 @@ function TrainingSetup({
     const [aimCoachState, setAimCoachState] = useState<{ message: string; tone: string }>({ message: '● CENTERED', tone: 'center' });
     const reactionSamplesRef = useRef<number[]>([]);
     const targetSpawnAtRef = useRef(performance.now());
-    const targetMeshRef = useRef<THREE.Mesh | null>(null);
+    const lastShotAtRef = useRef(0);
     const targetRootRef = useRef<THREE.Group | null>(null);
     const aimCoachGuideRef = useRef<THREE.Line | null>(null);
     const brakingMovedRef = useRef(false);
@@ -770,13 +773,17 @@ function TrainingSetup({
         flickMode: terminalFlickMode,
         customTargetSize: terminalTargetSize,
         customTargetSpeed: terminalTargetSpeed,
+        botBehavior: terminalBotBehavior,
+        peekCueEnabled: terminalPeekCue,
+        damageModelEnabled: terminalDamageModel,
       };
       onMapChange(terminalMap);
       onConfigChange(nextConfig);
-      statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0 };
+      statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0, headHits: 0, bodyHits: 0, legHits: 0, kills: 0, damageDealt: 0, movingShots: 0, averageSpread: 0 };
       setStats(statsRef.current);
       reactionSamplesRef.current = [];
       targetSpawnAtRef.current = performance.now();
+      lastShotAtRef.current = 0;
       timeRef.current = terminalDuration;
       setTimeLeft(terminalDuration);
       setFeedback(null);
@@ -980,13 +987,15 @@ function TrainingSetup({
       };
       const buildRobot = () => {
         const root = new THREE.Group();
-        const armorMat = new THREE.MeshStandardMaterial({ color: '#2b2d35', roughness: .4, metalness: .8 });
-        const darkMat = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: .6, metalness: .9 });
+        const rig = new THREE.Group();
+        rig.name = 'bot-rig';
+        const armorMat = new THREE.MeshStandardMaterial({ color: '#35423f', roughness: .48, metalness: .34 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: '#202a28', roughness: .68, metalness: .16 });
         const redAccentMat = new THREE.MeshStandardMaterial({ color: '#a3ad82', emissive: '#39432e', emissiveIntensity: .12, roughness: .48 });
         const whiteHeadMat = new THREE.MeshStandardMaterial({ color: '#e1ddd1', roughness: .36, metalness: .32 });
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,.15,8),darkMat); neck.name='body'; neck.position.y=1.47;
         const head = new THREE.Mesh(new THREE.BoxGeometry(.24,.28,.24),whiteHeadMat); head.name='head'; head.position.y=1.65;
-        const headTop = new THREE.Mesh(new THREE.BoxGeometry(.20,.05,.22),redAccentMat); headTop.name='body'; headTop.position.set(0,.15,0); head.add(headTop);
+        const headTop = new THREE.Mesh(new THREE.BoxGeometry(.20,.05,.22),redAccentMat); headTop.name='head'; headTop.position.set(0,.15,0); head.add(headTop);
         const torso = new THREE.Mesh(new THREE.BoxGeometry(.55,.5,.3),armorMat); torso.name='body'; torso.position.y=1.15;
         const chestCore = new THREE.Mesh(new THREE.SphereGeometry(.08,16,16),redAccentMat); chestCore.name='body'; chestCore.position.set(0,1.15,.16);
         const shoulderL = new THREE.Mesh(new THREE.BoxGeometry(.22,.15,.25),redAccentMat); shoulderL.name='body'; shoulderL.position.set(-.38,1.35,0);
@@ -997,15 +1006,68 @@ function TrainingSetup({
         const leftUpperArm = new THREE.Mesh(new THREE.CylinderGeometry(.05,.05,.35,8),armorMat); leftUpperArm.name='body'; leftUpperArm.position.set(-.28,1.2,.18); leftUpperArm.rotation.x=-1.1;
         const leftLowerArm = new THREE.Mesh(new THREE.CylinderGeometry(.045,.04,.35,8),armorMat); leftLowerArm.name='body'; leftLowerArm.position.set(.02,1.06,.44); leftLowerArm.rotation.x=-1.5; leftLowerArm.rotation.y=-.2;
         const waist = new THREE.Mesh(new THREE.CylinderGeometry(.12,.15,.2,8),darkMat); waist.name='body'; waist.position.y=.85;
-        const hips = new THREE.Mesh(new THREE.BoxGeometry(.45,.2,.25),armorMat); hips.name='body'; hips.position.y=.7;
-        const thighL = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighL.name='body'; thighL.position.set(-.15,.4,0); thighL.rotation.z=-.1;
-        const thighR = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighR.name='body'; thighR.position.set(.15,.4,0); thighR.rotation.z=.1;
-        const calfL = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfL.name='body'; calfL.position.set(-.18,.225,.05);
-        const calfR = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfR.name='body'; calfR.position.set(.18,.225,-.05);
-        root.add(neck,head,torso,chestCore,shoulderL,shoulderR,gunBody,rightUpperArm,rightLowerArm,leftUpperArm,leftLowerArm,waist,hips,thighL,thighR,calfL,calfR);
-        root.userData.targetRadius=.72; root.userData.head=head;
+        const hips = new THREE.Mesh(new THREE.BoxGeometry(.45,.2,.25),armorMat); hips.name='legs'; hips.position.y=.7;
+        const thighL = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighL.name='legs'; thighL.position.set(-.15,.4,0); thighL.rotation.z=-.1;
+        const thighR = new THREE.Mesh(new THREE.CylinderGeometry(.08,.06,.45,8),armorMat); thighR.name='legs'; thighR.position.set(.15,.4,0); thighR.rotation.z=.1;
+        const calfL = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfL.name='legs'; calfL.position.set(-.18,.225,.05);
+        const calfR = new THREE.Mesh(new THREE.CylinderGeometry(.06,.05,.45,8),darkMat); calfR.name='legs'; calfR.position.set(.18,.225,-.05);
+        rig.add(neck,head,torso,chestCore,shoulderL,shoulderR,gunBody,rightUpperArm,rightLowerArm,leftUpperArm,leftLowerArm,waist,hips,thighL,thighR,calfL,calfR);
+        const cue = new THREE.Mesh(
+          new THREE.RingGeometry(.25,.34,28),
+          new THREE.MeshBasicMaterial({ color:'#d4b06c', transparent:true, opacity:.8, side:THREE.DoubleSide, depthWrite:false })
+        );
+        cue.name = 'peek-cue';
+        cue.rotation.x = -Math.PI / 2;
+        cue.position.y = .035;
+        cue.visible = false;
+        cue.raycast = () => undefined;
+        root.add(rig,cue);
+        root.userData.targetRadius=.72; root.userData.head=head; root.userData.rig=rig; root.userData.peekCue=cue;
         root.traverse((object)=>{if(object instanceof THREE.Mesh)object.castShadow=true;});
         return root;
+      };
+      const chooseRobotPosition = () => {
+        if (botBehavior === 'peek' && mapId === 'corridor') {
+          const side = Math.random() < .5 ? -1 : 1;
+          return new THREE.Vector3(side * 6.8, 0, -11.4 + Math.random() * .4);
+        }
+        if (botBehavior === 'peek' && mapId === 'arena') {
+          const side = Math.random() < .5 ? -1 : 1;
+          return new THREE.Vector3(side * 8.3, 0, -1.3 + Math.random() * .3);
+        }
+        return findRobotPosition(.72);
+      };
+      const configureBot = (root: THREE.Group) => {
+        root.userData.isTrainingBot = true;
+        root.userData.hp = 100;
+        root.userData.maxHp = 100;
+        root.userData.botBehavior = botBehavior;
+        root.userData.baseX = root.position.x;
+        root.userData.baseZ = root.position.z;
+        root.userData.spawnedAt = performance.now();
+        root.userData.reacted = false;
+        root.userData.strafeDirection = Math.random() < .5 ? -1 : 1;
+        root.userData.strafeTimer = .35 + Math.random() * .75;
+        root.userData.strafeSpeed = 1.4 + Math.random() * 1.2;
+        if (botBehavior === 'peek') {
+          root.userData.peekPhase = 'warning';
+          root.userData.peekTimer = peekCueEnabled ? .42 + Math.random() * .28 : .35 + Math.random() * 1.05;
+          root.userData.peekOffset = (root.position.x > 0 ? -1 : 1) * (mapId === 'corridor' ? 1.9 : 2.4);
+          const rig = root.userData.rig as THREE.Group;
+          const cue = root.userData.peekCue as THREE.Mesh;
+          // Put the cue beyond the cover edge so the player can see the warning before the bot peeks.
+          cue.position.x = Number(root.userData.peekOffset) * 1.12;
+          rig.visible = false;
+          cue.visible = peekCueEnabled;
+        }
+      };
+      const disposeTarget = (root: THREE.Object3D) => {
+        root.traverse((object) => {
+          if (!(object instanceof THREE.Mesh)) return;
+          object.geometry.dispose();
+          const materials = Array.isArray(object.material) ? object.material : [object.material];
+          materials.forEach((current) => current.dispose());
+        });
       };
       const spawn = () => {
         targetSpawnAtRef.current = performance.now();
@@ -1014,25 +1076,33 @@ function TrainingSetup({
           if (flickMode === 'random') {
             const radius=difficultySize;
             const sphere=new THREE.Mesh(new THREE.SphereGeometry(radius,24,24),new THREE.MeshStandardMaterial({color:'#ca8969',emissive:'#4d291f',emissiveIntensity:.16,roughness:.52,metalness:.12}));
-            sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.position.copy(findFlickPosition(radius));
+            sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.userData.hp=100; root.userData.maxHp=100; root.userData.spawnedAt=performance.now(); root.userData.reacted=false; root.position.copy(findFlickPosition(radius));
           } else {
-            const pos=findRobotPosition(.72); root.position.set(pos.x,HEADLINE_Y-1.65,pos.z);
+            const pos=chooseRobotPosition(); root.position.set(pos.x,HEADLINE_Y-1.65,pos.z); configureBot(root);
           }
-          group.add(root); targetRootRef.current=group; targetMeshRef.current=null; return;
+          group.add(root); targetRootRef.current=group; return;
         }
-        if (targetRootRef.current) group.remove(targetRootRef.current);
+        if (targetRootRef.current) { group.remove(targetRootRef.current); disposeTarget(targetRootRef.current); }
         const root=buildRobot(); const robotRootY=HEADLINE_Y-1.65;
         if (drill === 'braking') {
-          const position = findRobotPosition(.72);
+          const position = chooseRobotPosition();
           root.position.set(position.x, robotRootY, position.z);
         }
         else root.position.set(0,robotRootY,-9);
-        group.add(root); targetRootRef.current=root; targetMeshRef.current=root.userData.head as THREE.Mesh; brakingMovedRef.current=false;
+        configureBot(root);
+        group.add(root); targetRootRef.current=root; brakingMovedRef.current=false;
       };
       const raycaster = new THREE.Raycaster();
+      const isTargetVisible = (object: THREE.Object3D) => {
+        let current: THREE.Object3D | null = object;
+        while (current && current !== group) {
+          if (!current.visible) return false;
+          current = current.parent;
+        }
+        return true;
+      };
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
-      const trackingState = { direction: 1, velocity: 0, timer: 0 };
       let aimingWithMouse = false;
       let frame = 0;
       let previous = performance.now();
@@ -1069,6 +1139,26 @@ function TrainingSetup({
         if (event.button !== 0) return;
         if (event.target !== renderer.domElement) return;
         event.preventDefault();
+
+        const now = performance.now();
+        const movementSpeed = velocity.length();
+        const stableForDrill = drill === 'braking'
+          ? movementSpeed <= brakingStopThreshold
+          : movementSpeed <= .06;
+        const profile = WEAPONS[settings.weapon];
+        const baseSpread = profile.spread;
+        const movementSpread = stableForDrill ? 0 : Math.min(1.4, movementSpeed / Math.max(settings.moveSpeed, .1) * 1.4);
+        const jumpSpread = groundedRef.current ? 0 : .85;
+        const minimumFireInterval = 1000 / Math.max(profile.fireRate, .1);
+        const sincePreviousShot = now - lastShotAtRef.current;
+        const rapidSpread = lastShotAtRef.current > 0 && sincePreviousShot < minimumFireInterval
+          ? Math.min(.55, (1 - sincePreviousShot / minimumFireInterval) * .55)
+          : 0;
+        const spreadAngle = Math.min(4.5, baseSpread + movementSpread + jumpSpread + rapidSpread);
+        lastShotAtRef.current = now;
+        setShotError(spreadAngle);
+        setShotErrorHistory((current) => [...current.slice(-17), spreadAngle]);
+
         const rect = renderer.domElement.getBoundingClientRect();
         const shotNdc = document.pointerLockElement === renderer.domElement
           ? new THREE.Vector2(0, 0)
@@ -1077,8 +1167,18 @@ function TrainingSetup({
             -((event.clientY - rect.top) / rect.height) * 2 + 1,
           );
         raycaster.setFromCamera(shotNdc, camera);
+        const shotDirection = raycaster.ray.direction.clone();
+        const spreadRadius = Math.tan(THREE.MathUtils.degToRad(spreadAngle)) * Math.sqrt(Math.random());
+        const spreadRotation = Math.random() * Math.PI * 2;
+        const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+        const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        shotDirection
+          .addScaledVector(cameraRight, Math.cos(spreadRotation) * spreadRadius)
+          .addScaledVector(cameraUp, Math.sin(spreadRotation) * spreadRadius)
+          .normalize();
+        raycaster.set(camera.position, shotDirection);
         const allTargetIntersections = targetRootRef.current
-          ? raycaster.intersectObject(targetRootRef.current, true)
+          ? raycaster.intersectObject(targetRootRef.current, true).filter((item) => isTargetVisible(item.object))
           : [];
         const firstBlocker = raycaster.intersectObjects(world.bulletBlockers, true)[0];
         const intersections = firstBlocker
@@ -1086,47 +1186,45 @@ function TrainingSetup({
           : allTargetIntersections;
 
         const hitObject = intersections[0]?.object ?? null;
-        const hitHead = intersections.find((item) =>
-          drill === 'flick'
-            ? (flickMode === 'random' ? item.object.name === 'target' : item.object.name === 'head')
-            : item.object === targetMeshRef.current
-        );
-        const headHit = Boolean(hitHead);
-        const bodyHit = intersections.length > 0 && !headHit;
+        let zoneObject: THREE.Object3D | null = hitObject;
+        while (zoneObject && !['head', 'body', 'legs', 'target'].includes(zoneObject.name)) zoneObject = zoneObject.parent;
+        const zone = zoneObject?.name === 'target' ? 'head' : zoneObject?.name;
+        const headHit = zone === 'head';
+        const bodyHit = zone === 'body';
+        const legHit = zone === 'legs';
         let hitRoot: THREE.Object3D | null = null;
         if (hitObject) {
           let cursor: THREE.Object3D | null = hitObject;
           while (cursor && cursor.parent && cursor.parent !== group) cursor = cursor.parent;
           hitRoot = cursor && cursor.parent === group ? cursor : null;
         }
-        const reaction = performance.now() - targetSpawnAtRef.current;
-        if (drill === 'flick' && Number.isFinite(reaction)) {
-          reactionSamplesRef.current.push(reaction);
-          if (reactionSamplesRef.current.length > 100) reactionSamplesRef.current.shift();
+        if (hitRoot && !hitRoot.userData.reacted) {
+          const targetReaction = performance.now() - Number(hitRoot.userData.spawnedAt ?? targetSpawnAtRef.current);
+          if (Number.isFinite(targetReaction) && (drill === 'flick' || botBehavior !== 'static')) {
+            reactionSamplesRef.current.push(targetReaction);
+            if (reactionSamplesRef.current.length > 100) reactionSamplesRef.current.shift();
+          }
+          hitRoot.userData.reacted = true;
         }
-        // 발사 오차는 발사 순간의 이동 상태를 측정합니다.
-        // 정지 또는 확실한 브레이킹 상태에서는 0, 움직이는 중 발사하면 오차가 커집니다.
-        const movementSpeed = velocity.length();
-        const isBrakingStable = drill === 'braking'
-          ? movementSpeed <= brakingStopThreshold
-          : movementSpeed <= 0.06;
-        const shotErrorValue = isBrakingStable ? 0 : Math.min(12, movementSpeed * 2.8);
-        setShotError(shotErrorValue);
-        setShotErrorHistory((current) => [...current.slice(-17), shotErrorValue]);
         const next = {
           ...statsRef.current,
           shots: statsRef.current.shots + 1,
           overshoots: statsRef.current.overshoots ?? 0,
+          headHits: statsRef.current.headHits ?? 0,
+          bodyHits: statsRef.current.bodyHits ?? 0,
+          legHits: statsRef.current.legHits ?? 0,
+          kills: statsRef.current.kills ?? 0,
+          damageDealt: statsRef.current.damageDealt ?? 0,
+          movingShots: statsRef.current.movingShots ?? 0,
         };
 
+        if (movementSpeed > .06) next.movingShots += 1;
+        next.averageSpread = (((statsRef.current.averageSpread ?? 0) * (next.shots - 1)) + spreadAngle) / next.shots;
         const brakingMoving =
           drill === 'braking' && velocity.length() > brakingStopThreshold;
 
         const brakingNoMovement =
           drill === 'braking' && !brakingMovedRef.current;
-
-        const shotDirection = new THREE.Vector3();
-        camera.getWorldDirection(shotDirection);
 
         const tracerEnd = camera.position
           .clone()
@@ -1134,74 +1232,68 @@ function TrainingSetup({
 
         fireVisual(tracerEnd);
 
-        if (drill === 'braking' && brakingNoMovement) {
+        if (hitObject && hitRoot && (headHit || bodyHit || legHit)) {
+          const zoneMultiplier = headHit ? 1 : bodyHit ? .5 : .35;
+          const rawDamage = Math.max(1, Math.round(profile.damage * zoneMultiplier));
+          const currentHealth = Number(hitRoot.userData.hp ?? 100);
+          const actualDamage = damageModelEnabled ? Math.min(currentHealth, rawDamage) : 0;
+          if (damageModelEnabled) hitRoot.userData.hp = Math.max(0, currentHealth - rawDamage);
+          const eliminated = damageModelEnabled && Number(hitRoot.userData.hp) <= 0;
+          if (headHit) next.headHits += 1;
+          else if (bodyHit) next.bodyHits += 1;
+          else next.legHits += 1;
+          next.hits += 1;
+          next.damageDealt += actualDamage;
+          if (eliminated) next.kills += 1;
+          next.streak += 1;
+          next.maxStreak = Math.max(next.maxStreak ?? 0, next.streak);
+
+          const stopQuality = drill === 'braking'
+            ? Math.max(0, 1 - velocity.length() / .9)
+            : 1;
+          const zonePoints = headHit ? 100 : bodyHit ? 54 : 34;
+          const points = Math.round(
+            zonePoints *
+            (1 + Math.min(next.streak, 15) * .08) *
+            (.65 + stopQuality * .35) *
+            (difficulty === 'pressure' || difficulty === 'hell' ? 1.35 : difficulty === 'foundation' || difficulty === 'trainee' ? .9 : 1.12)
+          );
+          next.score += points - (drill === 'braking' && brakingNoMovement ? 20 : 0);
+
+          if (feedbackEnabled) setFeedback({
+            text: !damageModelEnabled
+              ? `${headHit ? '헤드' : bodyHit ? '몸통' : '다리'} 명중 · 기록만 +${points}`
+              : `${headHit ? '헤드' : bodyHit ? '몸통' : '다리'} ${actualDamage} 피해 · ${eliminated ? '제압' : `HP ${Math.max(0, currentHealth - rawDamage)}`} +${points}`,
+            miss: false,
+            id: Date.now(),
+          });
+
+          if (eliminated) {
+            group.remove(hitRoot);
+            disposeTarget(hitRoot);
+            if (drill === 'flick') {
+              targetRootRef.current = group;
+              spawn();
+            } else spawn();
+          }
+        } else if (drill === 'braking' && brakingNoMovement) {
           next.streak = 0;
           next.overshoots = (next.overshoots ?? 0) + 1;
           next.score = Math.max(0, next.score - 20);
 
           if (feedbackEnabled) setFeedback({
-            text: '쏘기 전에 움직이세요 -20',
+            text: '이동 후 정지 사격 -20',
             miss: true,
             id: Date.now(),
           });
-        } else if (headHit && !brakingMoving) {
-          next.hits += 1;
-          next.streak += 1;
-          next.maxStreak = Math.max(next.maxStreak ?? 0, next.streak);
-
-          const stopQuality =
-            drill === 'braking'
-              ? Math.max(0, 1 - velocity.length() / .9)
-              : 1;
-
-          const points = Math.round(
-            100 *
-            (1 + Math.min(next.streak, 15) * .08) *
-            (1 + stopQuality * .5) *
-            (difficulty === 'pressure' || difficulty === 'hell'
-              ? 1.35
-              : difficulty === 'foundation' || difficulty === 'trainee'
-                ? 0.9
-                : 1.12)
-          );
-
-          next.score += points;
-
-          if (feedbackEnabled) setFeedback({
-            text:
-              drill === 'braking'
-                ? `브레이킹 + 헤드샷 +${points}`
-                : `헤드 명중 +${points}`,
-            miss: false,
-            id: Date.now(),
-          });
-
-          if (drill === 'flick' && hitRoot) {
-            group.remove(hitRoot);
-            hitRoot.traverse((object) => {
-              if (object instanceof THREE.Mesh) {
-                object.geometry.dispose();
-                const material = object.material;
-                if (Array.isArray(material)) material.forEach((m) => m.dispose());
-                else material.dispose();
-              }
-            });
-            spawn();
-            targetRootRef.current = group;
-            targetMeshRef.current = null;
-          } else {
-            spawn();
-          }
         } else {
           next.streak = 0;
           next.score = Math.max(0, next.score - 20);
 
           if (feedbackEnabled) setFeedback({
             text: brakingMoving
-              ? '쏘기 전에 움직이세요 -20'
-              : bodyHit
-                ? '몸통 명중 · 헤드라인 연습 실패 -20'
-                : '빗나감 -20',
+              ? '브레이킹 전에 발사 · 퍼짐 증가 -20'
+              : '빗나감 -20',
             miss: true,
             id: Date.now(),
           });
@@ -1347,6 +1439,7 @@ function TrainingSetup({
             });
             const center = new THREE.Vector2(0, 0);
             for (const candidate of candidates) {
+              if (!isTargetVisible(candidate)) continue;
               const projected = candidate.getWorldPosition(new THREE.Vector3()).project(camera);
               const distance = Math.hypot(projected.x - center.x, projected.y - center.y);
               if (distance < bestDistance) {
@@ -1366,45 +1459,59 @@ function TrainingSetup({
           } else {
             aimGuide.visible = false;
           }
-          if (drill !== 'flick' && targetRootRef.current) {
-            const root = targetRootRef.current;
+          for (const root of group.children) {
+            if (!root.userData.isTrainingBot) continue;
+            const rig = root.userData.rig as THREE.Group;
+            const cue = root.userData.peekCue as THREE.Mesh;
+            const phase = root.userData.peekPhase as string | undefined;
+            if (root.userData.botBehavior === 'peek' && phase) {
+              root.userData.peekTimer -= delta;
+              if (phase === 'warning') {
+                if (root.userData.peekTimer <= 0) {
+                  root.userData.peekPhase = 'exposed';
+                  root.userData.peekTimer = .9 + Math.random() * .55;
+                  root.userData.exposedDuration = root.userData.peekTimer;
+                  rig.visible = true;
+                  cue.visible = false;
+                  targetSpawnAtRef.current = performance.now();
+                  if (!peekCueEnabled) {
+                    root.userData.spawnedAt = performance.now();
+                    root.userData.reacted = false;
+                  }
+                }
+              } else if (phase === 'exposed') {
+                const duration = Number(root.userData.exposedDuration ?? 1.1);
+                const progress = THREE.MathUtils.clamp(1 - root.userData.peekTimer / duration, 0, 1);
+                const reveal = THREE.MathUtils.smoothstep(progress, 0, .22);
+                const strafeOffset = drill === 'tracking' ? Math.sin(progress * Math.PI * 3) * .7 : 0;
+                root.position.x = Number(root.userData.baseX) + Number(root.userData.peekOffset) * reveal + strafeOffset;
+                if (root.userData.peekTimer <= 0) {
+                  root.userData.peekPhase = 'warning';
+                  root.userData.peekTimer = peekCueEnabled ? .45 + Math.random() * .5 : .3 + Math.random() * 1.05;
+                  root.userData.exposedDuration = 0;
+                  root.position.x = Number(root.userData.baseX);
+                  rig.visible = false;
+                  cue.visible = peekCueEnabled;
+                  if (peekCueEnabled) {
+                    targetSpawnAtRef.current = performance.now();
+                    root.userData.spawnedAt = performance.now();
+                    root.userData.reacted = false;
+                  }
+                }
+              }
+            } else if (root.userData.botBehavior === 'strafe' || (drill === 'tracking' && root.userData.botBehavior !== 'static')) {
+              root.userData.strafeTimer -= delta;
+              const baseX = Number(root.userData.baseX ?? root.position.x);
+              const direction = Number(root.userData.strafeDirection ?? 1);
+              if (root.userData.strafeTimer <= 0 || Math.abs(root.position.x - baseX) >= 1.8) {
+                root.userData.strafeDirection = Math.abs(root.position.x - baseX) >= 1.8 ? -direction : (Math.random() < .5 ? -1 : 1);
+                root.userData.strafeTimer = .35 + Math.random() * .8;
+              }
+              root.position.x += Number(root.userData.strafeDirection) * Number(root.userData.strafeSpeed) * delta;
+            }
             const dx = camera.position.x - root.position.x;
             const dz = camera.position.z - root.position.z;
             root.rotation.y = Math.atan2(dx, dz);
-          }
-
-          if (drill === 'tracking' && targetRootRef.current) {
-            // Valorant-style strafing: the bot stays grounded and moves in
-            // unpredictable left/right bursts instead of floating in an orbit.
-            const root = targetRootRef.current;
-            const maxX = difficulty === 'pressure' || difficulty === 'hell' ? 3.0 : difficulty === 'foundation' || difficulty === 'trainee' ? 3.9 : 3.5;
-            const tracking = trackingState;
-
-            // Pick a new strafe direction after each segment. Same-direction
-            // repeats are intentionally possible (e.g. L-L-L-R-R-L).
-            if (tracking.timer <= 0) {
-              const atLeft = root.position.x <= -maxX + .08;
-              const atRight = root.position.x >= maxX - .08;
-              if (atLeft) tracking.direction = 1;
-              else if (atRight) tracking.direction = -1;
-              else if (Math.random() < .38) tracking.direction *= -1;
-              else tracking.direction = Math.random() < .5 ? -1 : 1;
-
-              tracking.timer = .42 + Math.random() * .62;
-            }
-
-            const distanceToEdge = maxX - Math.abs(root.position.x);
-            const edgeSlowdown = THREE.MathUtils.clamp(distanceToEdge / .8, .22, 1);
-            const targetSpeed = (difficulty === 'pressure' || difficulty === 'hell' ? 3.4 : difficulty === 'foundation' || difficulty === 'trainee' ? 2.5 : 3.05) * (difficulty === 'custom' ? terminalTargetSpeed : 1) * edgeSlowdown;
-            const accel = 10.5;
-            tracking.velocity = THREE.MathUtils.damp(tracking.velocity, tracking.direction * targetSpeed, accel, delta);
-
-            root.position.x += tracking.velocity * delta;
-            root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
-            root.position.y = HEADLINE_Y - 1.65;
-            root.position.z = -9.0;
-
-            tracking.timer -= delta;
           }
         }
         if (aimCoach && performance.now() - aimCoachStampRef.current > 120) {
@@ -1412,7 +1519,7 @@ function TrainingSetup({
           let bestHead: THREE.Object3D | null = null;
           let bestDistance = Infinity;
           group.traverse((object) => {
-            if (object.name !== 'head' && object.name !== 'target') return;
+            if ((object.name !== 'head' && object.name !== 'target') || !isTargetVisible(object)) return;
             const projected = object.getWorldPosition(new THREE.Vector3()).project(camera);
             const distance = Math.hypot(projected.x, projected.y);
             if (projected.z > -1 && projected.z < 1 && distance < bestDistance) {
@@ -1471,7 +1578,7 @@ function TrainingSetup({
         renderer.dispose();
         if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed]);
+    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed, botBehavior, peekCueEnabled, damageModelEnabled]);
 
     useEffect(() => {
       if (duration === 0) {
@@ -1670,7 +1777,7 @@ function TrainingSetup({
                         />
                       ))}
                   </div>
-                  <small>미발사 · 정지 발사 0 · 이동 발사 오차</small>
+                  <small>무기 기본 정확도 + 이동 · 공중 · 연사 퍼짐</small>
                 </div>
               )}
             </div>
@@ -1846,6 +1953,27 @@ function TrainingSetup({
                     </div>
                   </div>
                 )}
+
+                <div className="terminal-bot-settings">
+                    <div className="terminal-setting-block">
+                      <b>봇 행동 / 전투 판정</b>
+                      <div className="terminal-chip-row">
+                        {([
+                          ['static', '고정'],
+                          ['peek', '불규칙 피킹'],
+                          ['strafe', '좌우 이동'],
+                        ] as const).map(([value, label]) => (
+                          <button key={value} className={terminalBotBehavior === value ? 'selected' : ''} onClick={() => setTerminalBotBehavior(value)}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="terminal-bot-toggles">
+                      <label><input type="checkbox" checked={terminalDamageModel} onChange={(event) => setTerminalDamageModel(event.target.checked)} /> 무기 피해와 타겟 체력 적용</label>
+                      {terminalBotBehavior === 'peek' && (
+                        <label><input type="checkbox" checked={terminalPeekCue} onChange={(event) => setTerminalPeekCue(event.target.checked)} /> 피킹 전 약한 신호</label>
+                      )}
+                    </div>
+                </div>
 
                 <div className="terminal-toggle-row">
                   <label><input type="checkbox" checked={terminalFeedback} onChange={(event) => setTerminalFeedback(event.target.checked)} /> 명중 피드백</label>
@@ -2111,6 +2239,7 @@ function TrainingSetup({
   function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
     const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
     const reaction = stats.avgReaction ?? 0;
+    const headshotRate = stats.hits ? ((stats.headHits ?? 0) / stats.hits) * 100 : 0;
     const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 250) / 8)) : stats.accuracy;
     const sessionScore = Math.max(0, Math.min(100, Math.round(stats.accuracy * .72 + reactionScore * .28)));
     const grade = sessionScore >= 90 ? 'A' : sessionScore >= 80 ? 'B+' : sessionScore >= 70 ? 'B' : sessionScore >= 60 ? 'C' : 'D';
@@ -2142,6 +2271,14 @@ function TrainingSetup({
           <section className="result-core">
             <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
             <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
+            <div className="result-zone-grid">
+              <div><b>{stats.headHits ?? 0}</b><span>HEAD · {headshotRate.toFixed(0)}%</span></div>
+              <div><b>{stats.bodyHits ?? 0}</b><span>BODY HITS</span></div>
+              <div><b>{stats.legHits ?? 0}</b><span>LEG HITS</span></div>
+              <div><b>{stats.kills ?? 0}</b><span>ELIMINATIONS</span></div>
+              <div><b>{stats.damageDealt ?? 0}</b><span>DAMAGE</span></div>
+              <div><b>{stats.averageSpread?.toFixed(2) ?? '--'}°</b><span>AVG SPREAD</span></div>
+            </div>
             <div className="result-pattern-grid">
               <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
               <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
@@ -2410,11 +2547,11 @@ function TrainingSetup({
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
     const [mapId, setMapId] = useState<TrainingMapId>('range');
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'duel', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random' });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'duel', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random', botBehavior: 'peek', peekCueEnabled: true, damageModelEnabled: true });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
-    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, headHits: stats.headHits, bodyHits: stats.bodyHits, legHits: stats.legHits, kills: stats.kills, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); }} onEnterRange={() => setView('range')} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
     if (view === 'range') return <RangeScene {...config} mapId={mapId} onMapChange={setMapId} onConfigChange={setConfig} onLeave={() => setView('home')} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;

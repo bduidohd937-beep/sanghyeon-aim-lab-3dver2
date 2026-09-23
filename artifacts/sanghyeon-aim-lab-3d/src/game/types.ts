@@ -1,6 +1,7 @@
 export type Drill = 'flick' | 'tracking' | 'braking';
 export type FlickMode = 'random' | 'headline' | 'robot';
 export type TrainingMapId = 'range' | 'corridor' | 'arena';
+export type BotBehavior = 'static' | 'peek' | 'strafe';
 
 export type TrainingConfig = {
   drill: Drill;
@@ -12,6 +13,9 @@ export type TrainingConfig = {
   flickMode: FlickMode;
   customTargetSize?: number;
   customTargetSpeed?: number;
+  botBehavior?: BotBehavior;
+  peekCueEnabled?: boolean;
+  damageModelEnabled?: boolean;
 };
 
 export type View =
@@ -89,6 +93,13 @@ export type RunStats = {
   bestReaction?: number;
   overshoots?: number;
   maxStreak?: number;
+  headHits?: number;
+  bodyHits?: number;
+  legHits?: number;
+  kills?: number;
+  damageDealt?: number;
+  movingShots?: number;
+  averageSpread?: number;
 };
 
 export type HistoryItem = {
@@ -99,4 +110,8 @@ export type HistoryItem = {
   hits?: number;
   shots?: number;
   streak?: number;
+  headHits?: number;
+  bodyHits?: number;
+  legHits?: number;
+  kills?: number;
 };

@@ -1122,6 +1122,10 @@ body {
 .result-hit-line span{color:#77848f;font:700 10px var(--app-font-mono);letter-spacing:.08em}
 .result-hit-line b{margin-left:auto;font:800 24px var(--app-font-mono);color:#ff6973}
 .result-hit-line small{color:#77848f;font:700 9px var(--app-font-mono)}
+.result-zone-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 20px}
+.result-zone-grid>div{padding:12px 14px;border:1px solid #27323b;border-radius:8px;background:#111820}
+.result-zone-grid b{display:block;color:#edf1ed;font:700 18px var(--app-font-mono)}
+.result-zone-grid span{display:block;margin-top:6px;color:#829088;font:9px var(--app-font-mono);letter-spacing:.06em}
 .result-pattern-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 .result-pattern-grid>div{padding:17px;border:1px solid #27323b;border-radius:9px;background:#111820}
 .result-pattern-grid b{display:block;font:800 18px var(--app-font-mono);color:#f3f6f8}
@@ -1769,6 +1773,11 @@ body {
 .terminal-toggle-row{display:flex;align-items:center;flex-wrap:wrap;gap:17px;margin-top:15px;padding-top:12px;border-top:1px solid rgba(211,218,203,.1);}
 .terminal-toggle-row label{display:flex;align-items:center;gap:7px;color:#d5dbd0;font:10px var(--app-font-sans);}
 .terminal-toggle-row input{accent-color:#c5d4a4;}
+.terminal-bot-settings{display:grid;grid-template-columns:minmax(250px,1fr) 1fr;gap:16px;margin-top:14px;padding:13px 0;border-top:1px solid rgba(211,218,203,.1);border-bottom:1px solid rgba(211,218,203,.1)}
+.terminal-bot-settings .terminal-setting-block>b{display:block;margin-bottom:8px;color:#d5dbd0;font-size:10px}
+.terminal-bot-toggles{display:flex;flex-direction:column;justify-content:center;gap:10px}
+.terminal-bot-toggles label{display:flex;align-items:center;gap:7px;color:#d5dbd0;font-size:10px}
+.terminal-bot-toggles input{accent-color:#c5d4a4}
 .terminal-toggle-row>span{margin-left:auto;color:#aab4a9;font:10px var(--app-font-mono);}
 .facility-terminal-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 30px;}
 .facility-terminal-footer>span{color:#aeb8aa;font:10px var(--app-font-mono);}
@@ -1782,6 +1791,7 @@ body {
   .terminal-map-grid{grid-template-columns:1fr;}
   .terminal-map-card{min-height:108px;}
   .terminal-setting-grid{grid-template-columns:1fr;gap:12px;}
+  .terminal-bot-settings{grid-template-columns:1fr;gap:12px}
   .terminal-toggle-row>span{width:100%;margin-left:0;}
   .facility-terminal-footer{align-items:stretch;flex-direction:column;}
   .terminal-launch{width:100%;}
