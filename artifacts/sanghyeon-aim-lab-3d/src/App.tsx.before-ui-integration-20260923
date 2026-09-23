@@ -1,0 +1,1831 @@
+﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary } from '@/components/error-boundary';
+import { Toaster } from '@/components/ui/toaster';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import NotFound from '@/pages/not-found';
+import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
+import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, X } from 'lucide-react';
+import * as THREE from 'three';
+
+type Drill = 'flick' | 'tracking' | 'braking';
+type View = 'home' | 'range' | 'results' | 'sensitivity' | 'growth';
+type RunStatus = 'active' | 'paused' | 'done';
+type CrosshairConfig = { style: 'classic' | 'dot' | 'cross-dot'; color: string; size: number; gap: number; thickness: number; outline: boolean; centerDot: boolean };
+type Settings = { sensitivity: number; crosshair: CrosshairConfig };
+type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number };
+type HistoryItem = { score: number; accuracy: number; drill: Drill; date: string; hits?: number; shots?: number; streak?: number };
+
+const queryClient = new QueryClient();
+const DEFAULT_CROSSHAIR: CrosshairConfig = { style: 'classic', color: '#ffffff', size: 36, gap: 5, thickness: 2, outline: true, centerDot: false };
+const DEFAULT_SETTINGS: Settings = { sensitivity: 1.15, crosshair: DEFAULT_CROSSHAIR };
+
+const CROSSHAIR_PRESETS: Record<string, CrosshairConfig> = {
+  'CLASSIC': DEFAULT_CROSSHAIR,
+  'DOT': { ...DEFAULT_CROSSHAIR, style: 'dot', size: 18, gap: 0, thickness: 3, centerDot: true },
+  'SMALL': { ...DEFAULT_CROSSHAIR, size: 24, gap: 3 },
+  'CROSS DOT': { ...DEFAULT_CROSSHAIR, style: 'cross-dot', size: 30, gap: 4, centerDot: true },
+};
+
+function readStorage<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? (JSON.parse(value) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function saveStorage(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* storage is optional */ }
+}
+
+function normalizeSettings(raw: unknown): Settings {
+  if (!raw || typeof raw !== 'object') return DEFAULT_SETTINGS;
+  const value = raw as { sensitivity?: unknown; crosshair?: unknown };
+  const sensitivity = typeof value.sensitivity === 'number' ? value.sensitivity : DEFAULT_SETTINGS.sensitivity;
+  if (typeof value.crosshair === 'number') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, size: value.crosshair } };
+  if (value.crosshair && typeof value.crosshair === 'object') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) } };
+  return { sensitivity, crosshair: DEFAULT_CROSSHAIR };
+}
+
+function CrosshairView({ config, className = '' }: { config: CrosshairConfig; className?: string }) {
+  if (config.style === 'dot') return <div className={`crosshair-view ${className}`} style={{ width: config.size, height: config.size }}><i style={{ width: config.thickness * 2 + 2, height: config.thickness * 2 + 2, background: config.color, boxShadow: config.outline ? '0 0 0 1px #050709' : 'none' }} /></div>;
+  const line = { background: config.color, boxShadow: config.outline ? '0 0 0 1px #050709' : 'none' };
+  const length = Math.max(4, config.size / 2 - config.gap - 3);
+  return <div className={`crosshair-view ${className}`} style={{ width: config.size, height: config.size }}>
+    <span style={{ ...line, width: config.thickness, height: length, left: '50%', top: 0, transform: 'translateX(-50%)' }} />
+    <span style={{ ...line, width: config.thickness, height: length, left: '50%', bottom: 0, transform: 'translateX(-50%)' }} />
+    <span style={{ ...line, width: length, height: config.thickness, left: 0, top: '50%', transform: 'translateY(-50%)' }} />
+    <span style={{ ...line, width: length, height: config.thickness, right: 0, top: '50%', transform: 'translateY(-50%)' }} />
+    {config.centerDot && <i style={{ position: 'absolute', width: config.thickness + 1, height: config.thickness + 1, borderRadius: '50%', background: config.color, left: '50%', top: '50%', transform: 'translate(-50%,-50%)' }} />}
+  </div>;
+}
+
+function Brand() {
+  return (
+    <div className="brand" data-testid="brand-sanghyeon">
+      <div className="brand-mark" aria-hidden="true"><span /></div>
+      <div><div className="brand-name">Sanghyeon Aim Lab</div><div className="brand-sub">3D VALORANT AIM TRAINING</div></div>
+    </div>
+  );
+}
+
+function SettingsPanel({ settings, onChange, onClose }: { settings: Settings; onChange: (next: Settings) => void; onClose: () => void }) {
+  return (
+    <div className="modal-dim" role="dialog" aria-modal="true" aria-label="Range settings" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
+      <div className="pause-modal settings-modal">
+        <div className="panel-kicker"><span>媛먮룄 ?ㅼ젙 / 02</span><button className="hud-button" onClick={onClose} data-testid="button-close-settings" aria-label="?ㅼ젙 ?リ린"><X size={16} /></button></div>
+        <h2>議곗옉 ?ㅼ젙</h2>
+        <p>??留덉슦?ㅼ? ?먯뿉 留욊쾶 ?덈젴 ?섍꼍??議곗젙?섏꽭??</p>
+        <div className="settings-row">
+          <label htmlFor="sensitivity">留덉슦??媛먮룄</label>
+          <input id="sensitivity" type="range" min="0.4" max="2.4" step="0.05" value={settings.sensitivity} onChange={(event) => onChange({ ...settings, sensitivity: Number(event.target.value) })} data-testid="input-sensitivity" />
+          <output htmlFor="sensitivity">{settings.sensitivity.toFixed(2)}</output>
+        </div>
+        <div className="settings-row">
+          <label htmlFor="crosshair">?щ줈?ㅽ뿤???ш린</label>
+          <input id="crosshair" type="range" min="22" max="56" step="2" value={settings.crosshair.size} onChange={(event) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(event.target.value) } })} data-testid="input-crosshair-size" />
+          <output htmlFor="crosshair">{settings.crosshair.size}px</output>
+        </div>
+        <div className="modal-actions"><button className="secondary-button" onClick={onClose} data-testid="button-done-settings">설정 저장</button></div>
+      </div>
+    </div>
+  );
+}
+
+function Home({
+  settings,
+  onSettings,
+  onStart,
+  history,
+  onNavigate,
+}: {
+  settings: Settings;
+  onSettings: () => void;
+  onStart: (drill: Drill, duration: number, difficulty: string) => void;
+  history: HistoryItem[];
+  onNavigate: (view: View) => void;
+}) {
+  const [drill, setDrill] = useState<Drill>('flick');
+  const [duration, setDuration] = useState(30);
+  const [difficulty, setDifficulty] = useState('operator');
+
+  const best = history.length
+    ? Math.max(...history.map((item) => item.score))
+    : 0;
+
+  const lastAccuracy = history[0]?.accuracy ?? 0;
+
+  const updateCrosshair = (next: CrosshairConfig) => {
+    saveStorage('sanghyeon-settings', {
+      ...settings,
+      crosshair: next,
+    });
+    onNavigate('home');
+  };
+
+  return (
+    <div className="aim-app">
+      <header className="app-header">
+        <Brand />
+
+        <nav className="main-nav">
+          <button
+            className="active"
+            onClick={() => onNavigate('home')}
+          >
+            LAB
+          </button>
+
+          <button onClick={() => onNavigate('sensitivity')}>
+            감도 찾기
+          </button>
+
+          <button onClick={() => onNavigate('growth')}>
+            성장 기록
+          </button>
+        </nav>
+
+        <div className="header-meta">
+          <span>
+            <span
+              className="live-dot"
+              style={{ display: 'inline-block', marginRight: 8 }}
+            />
+            RANGE 01 / READY
+          </span>
+
+          <strong>
+            LV.{Math.max(1, Math.floor(history.length / 5) + 1)}
+          </strong>
+
+          <button
+            className="hud-button"
+            onClick={onSettings}
+            aria-label="설정"
+          >
+            <Settings2 size={16} />
+          </button>
+        </div>
+      </header>
+
+      <div className="home-layout">
+        <main className="home-main">
+          <div className="eyebrow">
+            <span className="eyebrow-line" />
+            TRAINING PROTOCOL // 3D AIM LAB
+          </div>
+
+          <h1 className="hero-title">
+            조준을
+            <br />
+            <em>정밀하게.</em>
+          </h1>
+
+          <p className="hero-copy">
+            기존 상현랩의 에임 훈련 UX를 유지하면서
+            실제 1인칭 3D 훈련장으로 확장했습니다.
+          </p>
+
+          <div className="drill-heading">
+            <h2>훈련 선택</h2>
+            <span>01 // 03</span>
+          </div>
+
+          <div className="drill-grid">
+            <button
+              className={`drill-card ${
+                drill === 'flick' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('flick')}
+            >
+              <Crosshair className="drill-icon" size={24} />
+
+              <h3>플릭 / 순간 조준</h3>
+
+              <p>
+                목표가 출현하면 마우스를 빠르게 이동해
+                정확하게 클릭합니다. 첫 발의 속도와
+                정확도를 측정합니다.
+              </p>
+            </button>
+
+            <button
+              className={`drill-card ${
+                drill === 'tracking' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('tracking')}
+            >
+              <Target className="drill-icon" size={24} />
+
+              <h3>트래킹 / 추적 조준</h3>
+
+              <p>
+                발로란트식 좌우 스트레이핑 타겟을 따라가며
+                머리 라인을 안정적으로 유지합니다.
+              </p>
+            </button>
+
+            <button
+              className={`drill-card ${
+                drill === 'braking' ? 'selected' : ''
+              }`}
+              onClick={() => setDrill('braking')}
+            >
+              <Gauge className="drill-icon" size={24} />
+
+              <h3>브레이킹 / 감속 조준</h3>
+
+              <p>
+                A/D 이동 후 정확히 멈추고 타겟을 클릭하여
+                카운터 스트레이핑과 첫 발 정확도를 훈련합니다.
+              </p>
+            </button>
+          </div>
+
+          <div className="setup-row">
+            <div>
+              <label className="field-label">훈련 시간</label>
+
+              <select
+                className="select-field"
+                value={duration}
+                onChange={(e) => setDuration(Number(e.target.value))}
+              >
+                <option value={15}>15초</option>
+                <option value={30}>30초</option>
+                <option value={60}>60초</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="field-label">훈련 난이도</label>
+
+              <select
+                className="select-field"
+                value={difficulty}
+                onChange={(e) => setDifficulty(e.target.value)}
+              >
+                <option value="trainee">
+                  트레이니 / 쉬운 타겟
+                </option>
+
+                <option value="operator">
+                  오퍼레이터 / 기본
+                </option>
+
+                <option value="elite">
+                  엘리트 / 빠른 타겟
+                </option>
+              </select>
+            </div>
+
+            <button
+              className="start-button"
+              onClick={() => onStart(drill, duration, difficulty)}
+            >
+              <Play size={16} fill="currentColor" />
+              훈련 시작
+            </button>
+          </div>
+
+          <div className="utility-note">
+            <Keyboard size={14} />
+
+            <span>이동</span>
+
+            <kbd>W</kbd>
+            <kbd>A</kbd>
+            <kbd>S</kbd>
+            <kbd>D</kbd>
+
+            <span>
+              마우스 시점 / 클릭 조준
+            </span>
+          </div>
+
+          <section className="restored-section">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">PERSONAL TOOLS</p>
+                <h2>개인 도구</h2>
+              </div>
+            </div>
+
+            <div className="tool-grid">
+              <button
+                className="tool-card"
+                onClick={() => onNavigate('sensitivity')}
+              >
+                <b>정밀 감도 찾기</b>
+
+                <span>
+                  DPI · 게임 감도 · eDPI · cm/360을 계산하고
+                  후보 감도를 비교합니다.
+                </span>
+
+                <i>OPEN →</i>
+              </button>
+
+              <button
+                className="tool-card"
+                onClick={() => onNavigate('growth')}
+              >
+                <b>에임 성장 기록</b>
+
+                <span>
+                  최근 평균, 최고 점수, 모드별 기록과
+                  훈련 성장을 확인합니다.
+                </span>
+
+                <i>OPEN →</i>
+              </button>
+            </div>
+          </section>
+
+          <section className="restored-section">
+            <div className="section-title">
+              <div>
+                <p className="eyebrow">CROSSHAIR</p>
+                <h2>조준선</h2>
+              </div>
+
+              <span className="phase">GLOBAL</span>
+            </div>
+
+            <div className="crosshair-panel panel">
+              <div className="crosshair-preview">
+                <CrosshairView config={settings.crosshair} />
+              </div>
+
+              <div className="crosshair-controls">
+                <div className="preset-row">
+                  {Object.entries(CROSSHAIR_PRESETS).map(
+                    ([name, config]) => (
+                      <button
+                        key={name}
+                        className={`preset ${
+                          settings.crosshair.style === config.style &&
+                          settings.crosshair.size === config.size
+                            ? 'selected'
+                            : ''
+                        }`}
+                        onClick={() => updateCrosshair(config)}
+                      >
+                        {name}
+                      </button>
+                    ),
+                  )}
+                </div>
+
+                <div className="control-row">
+                  <label>
+                    색상
+                    <input
+                      type="color"
+                      value={settings.crosshair.color}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          color: e.target.value,
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    크기
+                    <input
+                      type="range"
+                      min="12"
+                      max="64"
+                      value={settings.crosshair.size}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          size: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    간격
+                    <input
+                      type="range"
+                      min="0"
+                      max="12"
+                      value={settings.crosshair.gap}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          gap: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    두께
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      value={settings.crosshair.thickness}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          thickness: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </label>
+                </div>
+
+                <div className="toggle-row">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.crosshair.outline}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          outline: e.target.checked,
+                        })
+                      }
+                    />
+                    외곽선
+                  </label>
+
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={settings.crosshair.centerDot}
+                      onChange={(e) =>
+                        updateCrosshair({
+                          ...settings.crosshair,
+                          centerDot: e.target.checked,
+                        })
+                      }
+                    />
+                    중앙점
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <aside className="side-panel">
+          <div className="panel-kicker">
+            <span>개인 기록</span>
+            <span>RESTORED / 3D</span>
+          </div>
+
+          <h2 className="panel-title">훈련 기록</h2>
+
+          <div className="telemetry-hero">
+            <span className="metric-label">최고 점수</span>
+
+            <strong className="metric-value">
+              {best ? best.toLocaleString() : '--'}
+            </strong>
+
+            <span className="metric-caption">
+              {history.length
+                ? '현재 최고 기록'
+                : '훈련을 완료하면 기록이 저장됩니다'}
+            </span>
+          </div>
+
+          <div className="side-rule" />
+
+          <div className="stat-list">
+            <div className="stat-row">
+              <span>오늘 완료</span>
+              <strong>
+                {history.length.toString().padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>누적 훈련</span>
+              <strong>
+                {history.length.toString().padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>최근 명중률</span>
+              <strong>
+                {history.length
+                  ? `${lastAccuracy.toFixed(1)}%`
+                  : '--'}
+              </strong>
+            </div>
+
+            <div className="stat-row">
+              <span>현재 감도</span>
+              <strong>
+                {settings.sensitivity.toFixed(2)}
+              </strong>
+            </div>
+          </div>
+
+          <div className="side-rule" />
+
+          <div className="history-title">최근 훈련</div>
+
+          {history.length === 0 ? (
+            <div className="history-row">
+              <small>아직 기록이 없습니다.</small>
+              <strong>--</strong>
+            </div>
+          ) : (
+            history.slice(0, 6).map((item, index) => (
+              <div
+                className="history-row"
+                key={`${item.date}-${index}`}
+              >
+                <div>
+                  <strong>
+                    {item.score.toLocaleString()}
+                  </strong>
+
+                  <small
+                    style={{
+                      display: 'block',
+                      marginTop: 4,
+                    }}
+                  >
+                    {item.drill === 'flick'
+                      ? '플릭'
+                      : item.drill === 'tracking'
+                        ? '트래킹'
+                        : '브레이킹'}{' '}
+                    / {item.date}
+                  </small>
+                </div>
+
+                <em>
+                  {item.accuracy.toFixed(1)}%
+                </em>
+              </div>
+            ))
+          )}
+        </aside>
+      </div>
+    </div>
+  );
+}
+function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration });
+  const timeRef = useRef(duration);
+  const statusRef = useRef<RunStatus>('active');
+  const [status, setStatus] = useState<RunStatus>('active');
+  const [timeLeft, setTimeLeft] = useState(duration);
+  const [stats, setStats] = useState(statsRef.current);
+  const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pointerLocked, setPointerLocked] = useState(false);
+  const targetMeshRef = useRef<THREE.Mesh | null>(null);
+  const targetRootRef = useRef<THREE.Group | null>(null);
+  const brakingMovedRef = useRef(false);
+  const sensitivityRef = useRef(settings.sensitivity);
+  const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'elite' ? 0.31 : 0.42;
+  const finish = useCallback(() => {
+    if (statusRef.current === 'done') return;
+    statusRef.current = 'done';
+    const current = { ...statsRef.current, accuracy: statsRef.current.shots ? statsRef.current.hits / statsRef.current.shots * 100 : 0 };
+    statsRef.current = current;
+    setStats(current);
+    onFinish(current);
+  }, [onFinish]);
+  useEffect(() => { sensitivityRef.current = settings.sensitivity; }, [settings.sensitivity]);
+
+  useEffect(() => {
+    const mount = mountRef.current;
+    if (!mount) return;
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#081116');
+    scene.fog = new THREE.Fog('#081116', 8, 34);
+    const camera = new THREE.PerspectiveCamera(72, mount.clientWidth / mount.clientHeight, 0.1, 100);
+    camera.position.set(0, 1.6, 6);
+    camera.rotation.order = 'YXZ';
+    let yaw = 0;
+    let pitch = -0.02;
+    camera.rotation.set(pitch, yaw, 0);
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setSize(mount.clientWidth, mount.clientHeight); renderer.shadowMap.enabled = true; mount.appendChild(renderer.domElement);
+    scene.add(new THREE.HemisphereLight('#bfd5d0', '#10171a', 1.7));
+    const key = new THREE.DirectionalLight('#d8ffab', 3); key.position.set(-3, 8, 5); key.castShadow = true; scene.add(key);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#111c21', roughness: .88, metalness: .2 })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
+    const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
+    const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
+    const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
+    const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
+    const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
+    const group = new THREE.Group(); scene.add(group);
+
+    // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
+    const weapon = new THREE.Group();
+    weapon.position.set(.34, -.27, -.72);
+    weapon.rotation.set(-.03, -.03, -.02);
+    const weaponBody = new THREE.Mesh(
+      new THREE.BoxGeometry(.24, .16, .55),
+      new THREE.MeshStandardMaterial({ color: '#20282c', roughness: .62, metalness: .55 })
+    );
+    weaponBody.position.z = -.12;
+    weapon.add(weaponBody);
+    const weaponGrip = new THREE.Mesh(
+      new THREE.BoxGeometry(.11, .25, .13),
+      new THREE.MeshStandardMaterial({ color: '#111719', roughness: .8, metalness: .1 })
+    );
+    weaponGrip.position.set(.01, -.16, .04);
+    weaponGrip.rotation.x = -.18;
+    weapon.add(weaponGrip);
+    const barrel = new THREE.Mesh(
+      new THREE.CylinderGeometry(.035, .035, .55, 12),
+      new THREE.MeshStandardMaterial({ color: '#090d0f', roughness: .4, metalness: .8 })
+    );
+    barrel.rotation.x = Math.PI / 2;
+    barrel.position.set(0, .01, -.57);
+    weapon.add(barrel);
+    const sight = new THREE.Mesh(
+      new THREE.BoxGeometry(.055, .045, .16),
+      new THREE.MeshStandardMaterial({ color: '#7dff39', emissive: '#406d20', emissiveIntensity: .7, roughness: .3 })
+    );
+    sight.position.set(0, .105, -.25);
+    weapon.add(sight);
+    camera.add(weapon);
+    scene.add(camera);
+
+    let recoilKick = 0;
+    let recoilRoll = 0;
+    const baseWeaponZ = weapon.position.z;
+    const baseWeaponY = weapon.position.y;
+
+    const muzzleFlash = new THREE.Mesh(
+      new THREE.SphereGeometry(.065, 8, 8),
+      new THREE.MeshBasicMaterial({ color: '#fff2a3', transparent: true, opacity: 0 })
+    );
+    muzzleFlash.position.set(.34, -.26, -1.3);
+    camera.add(muzzleFlash);
+
+    const createTracer = (end: THREE.Vector3) => {
+      const start = new THREE.Vector3();
+      muzzleFlash.getWorldPosition(start);
+      const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
+      const material = new THREE.LineBasicMaterial({ color: '#eaff9a', transparent: true, opacity: .9 });
+      const tracer = new THREE.Line(geometry, material);
+      scene.add(tracer);
+      window.setTimeout(() => {
+        scene.remove(tracer);
+        geometry.dispose();
+        material.dispose();
+      }, 55);
+    };
+
+    const fireVisual = (end: THREE.Vector3) => {
+      muzzleFlash.material.opacity = 1;
+      recoilKick = Math.min(.075, recoilKick + .045);
+      recoilRoll += (Math.random() - .5) * .045;
+      window.setTimeout(() => { muzzleFlash.material.opacity = 0; }, 45);
+      createTracer(end);
+    };
+
+    const brakingStopThreshold = .16;
+    const brakingTargetY = 2.25;
+    const brakingTargetZ = -4.2;
+    const spawn = () => {
+      if (targetRootRef.current) group.remove(targetRootRef.current);
+      const root = new THREE.Group();
+
+      const botScale = difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94;
+      const bodyMaterial = new THREE.MeshStandardMaterial({
+        color: '#667277', emissive: '#182125', emissiveIntensity: .22,
+        metalness: .15, roughness: .72
+      });
+      const headMaterial = new THREE.MeshStandardMaterial({
+        color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.15,
+        metalness: .08, roughness: .4
+      });
+      const accentMaterial = new THREE.MeshStandardMaterial({
+        color: '#20292d', roughness: .72, metalness: .18
+      });
+
+      if (drill === 'flick') {
+        // Flick is deliberately a clean spherical target, not a humanoid.
+        const sphere = new THREE.Mesh(
+          new THREE.SphereGeometry(.30 * botScale, 24, 18),
+          headMaterial
+        );
+        sphere.name = 'head';
+        sphere.position.set(
+          (Math.random() - .5) * 5.0,
+          1.65 + Math.random() * 1.6,
+          -5.0 - Math.random() * 1.4
+        );
+        sphere.castShadow = true;
+        root.add(sphere);
+        group.add(root);
+        targetRootRef.current = root;
+        targetMeshRef.current = sphere;
+        brakingMovedRef.current = false;
+        return;
+      }
+
+      // Clean, thin humanoid range bot. No bulky front/back protrusions.
+      const head = new THREE.Mesh(
+        new THREE.SphereGeometry(.235 * botScale, 20, 14), headMaterial
+      );
+      head.name = 'head';
+      head.position.y = 1.70 * botScale;
+
+      const neck = new THREE.Mesh(
+        new THREE.CylinderGeometry(.07 * botScale, .075 * botScale, .15 * botScale, 12),
+        accentMaterial
+      );
+      neck.name = 'body';
+      neck.position.y = 1.48 * botScale;
+
+      // Thin rectangular torso with a subtle shoulder taper, facing the player.
+      const torso = new THREE.Mesh(
+        new THREE.BoxGeometry(.46 * botScale, .62 * botScale, .18 * botScale),
+        bodyMaterial
+      );
+      torso.name = 'body';
+      torso.position.y = 1.16 * botScale;
+
+      const shoulder = new THREE.Mesh(
+        new THREE.BoxGeometry(.72 * botScale, .16 * botScale, .20 * botScale),
+        bodyMaterial
+      );
+      shoulder.name = 'body';
+      shoulder.position.y = 1.39 * botScale;
+
+      const waist = new THREE.Mesh(
+        new THREE.BoxGeometry(.28 * botScale, .16 * botScale, .16 * botScale),
+        accentMaterial
+      );
+      waist.name = 'body';
+      waist.position.y = .82 * botScale;
+
+      const pelvis = new THREE.Mesh(
+        new THREE.BoxGeometry(.40 * botScale, .26 * botScale, .20 * botScale),
+        bodyMaterial
+      );
+      pelvis.name = 'body';
+      pelvis.position.y = .63 * botScale;
+
+      // Relaxed arms: upper arms hang slightly outward, forearms angle inward.
+      const upperArmGeo = new THREE.CapsuleGeometry(.085 * botScale, .30 * botScale, 5, 10);
+      const forearmGeo = new THREE.CapsuleGeometry(.075 * botScale, .27 * botScale, 5, 10);
+      const leftUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
+      const rightUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
+      const leftForearm = new THREE.Mesh(forearmGeo, accentMaterial);
+      const rightForearm = new THREE.Mesh(forearmGeo, accentMaterial);
+      [leftUpperArm, rightUpperArm, leftForearm, rightForearm].forEach((part) => { part.name = 'body'; });
+
+      leftUpperArm.position.set(-.43 * botScale, 1.17 * botScale, 0);
+      rightUpperArm.position.set(.43 * botScale, 1.17 * botScale, 0);
+      leftUpperArm.rotation.z = -.18;
+      rightUpperArm.rotation.z = .18;
+
+      leftForearm.position.set(-.49 * botScale, .91 * botScale, -.015 * botScale);
+      rightForearm.position.set(.49 * botScale, .91 * botScale, -.015 * botScale);
+      leftForearm.rotation.z = -.10;
+      rightForearm.rotation.z = .10;
+
+      // Slightly separated legs give a stable, natural standing pose.
+      const thighGeo = new THREE.CapsuleGeometry(.105 * botScale, .38 * botScale, 5, 10);
+      const shinGeo = new THREE.CapsuleGeometry(.09 * botScale, .34 * botScale, 5, 10);
+      const leftThigh = new THREE.Mesh(thighGeo, bodyMaterial);
+      const rightThigh = new THREE.Mesh(thighGeo, bodyMaterial);
+      const leftShin = new THREE.Mesh(shinGeo, accentMaterial);
+      const rightShin = new THREE.Mesh(shinGeo, accentMaterial);
+      [leftThigh, rightThigh, leftShin, rightShin].forEach((part) => { part.name = 'body'; });
+
+      leftThigh.position.set(-.13 * botScale, .39 * botScale, 0);
+      rightThigh.position.set(.13 * botScale, .39 * botScale, 0);
+      leftShin.position.set(-.13 * botScale, .06 * botScale, 0);
+      rightShin.position.set(.13 * botScale, .06 * botScale, 0);
+
+      const leftFoot = new THREE.Mesh(
+        new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
+      );
+      const rightFoot = new THREE.Mesh(
+        new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
+      );
+      leftFoot.name = 'body';
+      rightFoot.name = 'body';
+      leftFoot.position.set(-.13 * botScale, -.23 * botScale, -.055 * botScale);
+      rightFoot.position.set(.13 * botScale, -.23 * botScale, -.055 * botScale);
+
+      root.add(
+        head, neck, shoulder, torso, waist, pelvis,
+        leftUpperArm, rightUpperArm, leftForearm, rightForearm,
+        leftThigh, rightThigh, leftShin, rightShin, leftFoot, rightFoot
+      );
+
+      if (drill === 'braking') {
+        // Braking targets use a wider Valorant-like lane so the player has to
+        // actually move left/right before stopping and taking the shot.
+        root.position.set(
+          (Math.random() - .5) * 8.0,
+          .23 * botScale,
+          -4.8 - Math.random() * 1.5
+        );
+      } else {
+        // Tracking starts in a readable central lane; the whole bot moves later.
+        root.position.set(0, .23 * botScale, -5.6);
+      }
+
+      root.traverse((object) => {
+        if (object instanceof THREE.Mesh) object.castShadow = true;
+      });
+      group.add(root);
+      targetRootRef.current = root;
+      targetMeshRef.current = head;
+      brakingMovedRef.current = false;
+    };
+
+    // Spawn the first target when the range opens. Without this, the scene starts empty.
+    spawn();
+
+    const raycaster = new THREE.Raycaster();
+    const keys = new Set<string>();
+    const velocity = new THREE.Vector3();
+    const onPointerMove = (event: PointerEvent) => {
+      if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
+      const lookScale = .0016 * sensitivityRef.current;
+      yaw -= (event.movementX || 0) * lookScale;
+      pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
+      camera.rotation.set(pitch, yaw, 0);
+    };
+    const onShoot = (event: MouseEvent) => {
+      if (statusRef.current !== 'active') return;
+      event.preventDefault();
+      if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock?.();
+
+      raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+      const intersections = targetRootRef.current
+        ? raycaster.intersectObject(targetRootRef.current, true)
+        : [];
+
+      const headHit = intersections.some((item) => item.object === targetMeshRef.current);
+      const bodyHit = intersections.length > 0 && !headHit;
+
+      const next = {
+        ...statsRef.current,
+        shots: statsRef.current.shots + 1,
+      };
+
+      const brakingMoving =
+        drill === 'braking' && velocity.length() > brakingStopThreshold;
+
+      const brakingNoMovement =
+        drill === 'braking' && !brakingMovedRef.current;
+
+      const shotDirection = new THREE.Vector3();
+      camera.getWorldDirection(shotDirection);
+
+      const tracerEnd = camera.position
+        .clone()
+        .addScaledVector(shotDirection, 30);
+
+      fireVisual(tracerEnd);
+
+      if (drill === 'braking' && brakingNoMovement) {
+        next.streak = 0;
+        next.score = Math.max(0, next.score - 20);
+
+        setFeedback({
+          text: '이동 중 발사 -20',
+          miss: true,
+          id: Date.now(),
+        });
+      } else if (headHit && !brakingMoving) {
+        next.hits += 1;
+        next.streak += 1;
+
+        const stopQuality =
+          drill === 'braking'
+            ? Math.max(0, 1 - velocity.length() / .9)
+            : 1;
+
+        const points = Math.round(
+          100 *
+          (1 + Math.min(next.streak, 15) * .08) *
+          (1 + stopQuality * .5) *
+          (difficulty === 'elite'
+            ? 1.35
+            : difficulty === 'trainee'
+              ? .8
+              : 1)
+        );
+
+        next.score += points;
+
+        setFeedback({
+          text:
+            drill === 'braking'
+              ? `브레이킹 + 헤드샷 +${points}`
+              : `헤드 명중 +${points}`,
+          miss: false,
+          id: Date.now(),
+        });
+
+        spawn();
+      } else {
+        next.streak = 0;
+        next.score = Math.max(0, next.score - 20);
+
+        setFeedback({
+          text: brakingMoving
+            ? '이동 중 발사 -20'
+            : bodyHit
+              ? '몸통 명중 · 헤드라인 연습 실패 -20'
+              : '빗나감 -20',
+          miss: true,
+          id: Date.now(),
+        });
+      }
+
+      next.accuracy = next.shots
+        ? (next.hits / next.shots) * 100
+        : 0;
+
+      statsRef.current = next;
+      setStats({ ...next });
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (['w', 'a', 's', 'd'].includes(key)) { keys.add(key); event.preventDefault(); }
+    };
+    const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); };
+    const onBlur = () => keys.clear();
+    const onPointerLockChange = () => setPointerLocked(document.pointerLockElement === renderer.domElement);
+    const onCanvasClick = (event: MouseEvent) => onShoot(event);
+    const moveSpeed = 4.5;
+    const applyMovement = (delta: number) => {
+      const horizontal = Number(keys.has('d')) - Number(keys.has('a'));
+      const forwardInput = drill === 'braking' ? 0 : Number(keys.has('w')) - Number(keys.has('s'));
+      const input = new THREE.Vector3(horizontal, 0, forwardInput);
+      if (input.lengthSq() > 1) input.normalize();
+      const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+      const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+      const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * (drill === 'braking' ? 3.8 : moveSpeed)));
+      if (drill === 'braking' && horizontal !== 0) brakingMovedRef.current = true;
+      const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? (drill === 'braking' ? 18 : 32) : (drill === 'braking' ? 52 : 42)) * Math.min(delta, .05));
+      velocity.lerp(desired, blend);
+      camera.position.addScaledVector(velocity, delta);
+      camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
+      camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
+      camera.position.y = 1.6;
+    };
+    renderer.domElement.addEventListener('pointermove', onPointerMove); renderer.domElement.addEventListener('click', onCanvasClick); document.addEventListener('pointerlockchange', onPointerLockChange); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('blur', onBlur);
+    const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
+    window.addEventListener('resize', resize);
+    const trackingState = {
+      direction: Math.random() < .5 ? -1 : 1,
+      velocity: 0,
+      timer: .35 + Math.random() * .45,
+    };
+    let frame = 0; let previous = performance.now();
+    const animate = (now: number) => {
+      frame = requestAnimationFrame(animate);
+      const delta = Math.min((now - previous) / 1000, .05);
+      previous = now;
+      if (statusRef.current === 'active') {
+        applyMovement(delta);
+        recoilKick = THREE.MathUtils.damp(recoilKick, 0, 14, delta);
+        recoilRoll = THREE.MathUtils.damp(recoilRoll, 0, 12, delta);
+        weapon.position.z = baseWeaponZ + recoilKick;
+        weapon.position.y = baseWeaponY + recoilKick * .32;
+        weapon.rotation.x = -.03 + recoilKick * 1.7;
+        weapon.rotation.z = -.02 + recoilRoll;
+        if (drill === 'tracking' && targetRootRef.current) {
+          // Valorant-style strafing: the bot stays grounded and moves in
+          // unpredictable left/right bursts instead of floating in an orbit.
+          const root = targetRootRef.current;
+          const maxX = difficulty === 'elite' ? 3.15 : difficulty === 'trainee' ? 3.9 : 3.55;
+          const tracking = trackingState;
+
+          // Pick a new strafe direction after each segment. Same-direction
+          // repeats are intentionally possible (e.g. L-L-L-R-R-L).
+          if (tracking.timer <= 0) {
+            const atLeft = root.position.x <= -maxX + .08;
+            const atRight = root.position.x >= maxX - .08;
+            if (atLeft) tracking.direction = 1;
+            else if (atRight) tracking.direction = -1;
+            else if (Math.random() < .38) tracking.direction *= -1;
+            else tracking.direction = Math.random() < .5 ? -1 : 1;
+
+            tracking.timer = .42 + Math.random() * .62;
+          }
+
+          const distanceToEdge = maxX - Math.abs(root.position.x);
+          const edgeSlowdown = THREE.MathUtils.clamp(distanceToEdge / .8, .22, 1);
+          const targetSpeed = (difficulty === 'elite' ? 2.7 : 3.05) * edgeSlowdown;
+          const accel = 10.5;
+          tracking.velocity = THREE.MathUtils.damp(tracking.velocity, tracking.direction * targetSpeed, accel, delta);
+
+          root.position.x += tracking.velocity * delta;
+          root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
+          root.position.y = .23 * (difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94);
+          root.position.z = -5.75;
+          root.rotation.y = 0;
+
+          tracking.timer -= delta;
+        }
+      }
+      renderer.render(scene, camera);
+    };
+    frame = requestAnimationFrame(animate);
+    return () => { cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
+  }, [difficulty, drill, finish, difficultySize]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (statusRef.current !== 'active') return;
+      timeRef.current = Math.max(0, timeRef.current - .1);
+      setTimeLeft(timeRef.current);
+      if (timeRef.current <= 0) finish();
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, [finish]);
+  const togglePause = () => {
+    const next = statusRef.current === 'active' ? 'paused' : 'active';
+    if (next === 'paused' && document.pointerLockElement) document.exitPointerLock();
+    statusRef.current = next;
+    setStatus(next);
+  };
+  const exit = () => {
+    if (document.pointerLockElement) document.exitPointerLock();
+    finish();
+  };
+   return (
+    <div className="range-screen">
+      <div
+        ref={mountRef}
+        className="range-canvas-wrap"
+        data-testid="canvas-3d-range"
+      />
+
+      <div className="range-hud">
+        <div className="hud-top">
+          <div className="hud-brand">
+            <b>SANGHYEON 01</b>
+            {' / '}
+            {drill === 'flick'
+              ? '플릭 조준'
+              : drill === 'tracking'
+                ? '트래킹 조준'
+                : '브레이킹'}
+            {' / 진행 중'}
+          </div>
+
+          <div className="hud-actions">
+            <button
+              className="hud-button"
+              onClick={() => setSettingsOpen(true)}
+              aria-label="훈련 설정 열기"
+              data-testid="button-range-settings"
+            >
+              <Settings2 size={16} />
+            </button>
+
+            <button
+              className="hud-button"
+              onClick={togglePause}
+              aria-label={
+                status === 'paused'
+                  ? '훈련 재개'
+                  : '훈련 일시정지'
+              }
+              data-testid="button-pause-run"
+            >
+              {status === 'paused' ? (
+                <Play size={16} />
+              ) : (
+                <Pause size={16} />
+              )}
+            </button>
+
+            <button
+              className="hud-button"
+              onClick={exit}
+              aria-label="훈련 종료"
+              data-testid="button-exit-run"
+            >
+              <X size={17} />
+            </button>
+          </div>
+        </div>
+
+        <div className="hud-metrics">
+          <div className="hud-stat accent">
+            <label>점수</label>
+            <strong data-testid="telemetry-score">
+              {stats.score.toString().padStart(4, '0')}
+            </strong>
+          </div>
+
+          <div className="hud-stat">
+            <label>명중률</label>
+            <strong data-testid="telemetry-accuracy">
+              {stats.accuracy.toFixed(1)}%
+            </strong>
+          </div>
+
+          <div className="hud-stat">
+            <label>연속 명중</label>
+            <strong data-testid="telemetry-streak">
+              {stats.streak.toString().padStart(2, '0')}
+            </strong>
+          </div>
+        </div>
+
+        <div
+          className={`hud-time ${
+            timeLeft < 5 ? 'low' : ''
+          }`}
+        >
+          <label>남은 시간</label>
+          <strong data-testid="telemetry-time">
+            {timeLeft.toFixed(1)}초
+          </strong>
+        </div>
+
+        <CrosshairView
+          config={settings.crosshair}
+          className="crosshair-live"
+        />
+
+        {drill === 'braking' && (
+          <div className="braking-guide">
+            <b>브레이킹 · 카운터 스트레이프</b>
+            <span>
+              A / D 이동 후 반대 방향 입력으로 완전히 멈춘
+              뒤 조준선이 안정되면 CLICK
+            </span>
+          </div>
+        )}
+
+        {feedback && (
+          <div
+            key={feedback.id}
+            className={`hit-feedback ${
+              feedback.miss ? 'miss' : ''
+            }`}
+          >
+            {feedback.text}
+          </div>
+        )}
+
+        {!pointerLocked && status === 'active' && (
+          <div className="pointer-lock-hint">
+            클릭하여 시점 고정 · 조준 시작
+          </div>
+        )}
+
+        <div className="hud-bottom">
+          <div className="move-hint">
+            <span>이동</span>
+            <kbd>W</kbd>
+            <kbd>A</kbd>
+            <kbd>S</kbd>
+            <kbd>D</kbd>
+            <span>마우스 시점 / 클릭 사격</span>
+          </div>
+
+          <div className="range-status">
+            <Gauge
+              size={13}
+              style={{
+                verticalAlign: 'middle',
+                marginRight: 7,
+              }}
+            />
+            시작 프로토콜{' '}
+            <b>
+              {difficulty === 'trainee'
+                ? '연습생'
+                : difficulty === 'elite'
+                  ? '엘리트'
+                  : '요원'}
+            </b>
+          </div>
+        </div>
+      </div>
+
+      {status === 'paused' && (
+        <div className="modal-dim">
+          <div className="pause-modal">
+            <Pause
+              size={25}
+              color="hsl(71 100% 61%)"
+            />
+
+            <h2>훈련 일시정지</h2>
+
+            <p>
+              시간이 멈춰 있습니다. 준비가 되면 계속하세요.
+            </p>
+
+            <div className="modal-actions">
+              <button
+                className="secondary-button"
+                onClick={togglePause}
+                data-testid="button-resume-run"
+              >
+                <Play
+                  size={13}
+                  style={{
+                    verticalAlign: 'middle',
+                    marginRight: 7,
+                  }}
+                />
+                계속하기
+              </button>
+
+              <button
+                className="danger-button"
+                onClick={exit}
+                data-testid="button-exit-paused"
+              >
+                훈련 종료
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <SettingsPanel
+          settings={settings}
+          onChange={onSettingsChange}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
+    </div>
+  );
+}
+function SensitivityPage({
+  settings,
+  onChange,
+  onBack,
+}: {
+  settings: Settings;
+  onChange: (s: Settings) => void;
+  onBack: () => void;
+}) {
+  const [dpi, setDpi] = useState(800);
+  const [sens, setSens] = useState(
+    Number((settings.sensitivity * 0.35).toFixed(3)),
+  );
+  const [candidate, setCandidate] = useState<number | null>(null);
+  const [hits, setHits] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [running, setRunning] = useState(false);
+  const [target, setTarget] = useState({ x: 50, y: 50 });
+
+  const edpi = dpi * sens;
+  const cm360 = 360 / (0.022 * dpi * sens);
+
+  const candidates = [0.8, 0.9, 1, 1.1, 1.2].map((m) =>
+    Number((sens * m).toFixed(3)),
+  );
+
+  const start = (value: number) => {
+    setCandidate(value);
+    setHits(0);
+    setTotal(0);
+    setTarget({
+      x: 12 + Math.random() * 76,
+      y: 12 + Math.random() * 76,
+    });
+    setRunning(true);
+  };
+
+  const hit = () => {
+    if (!running) return;
+
+    const nextTotal = total + 1;
+
+    setTotal(nextTotal);
+    setHits((value) => value + 1);
+
+    if (nextTotal >= 10) {
+      setRunning(false);
+    } else {
+      setTarget({
+        x: 12 + Math.random() * 76,
+        y: 12 + Math.random() * 76,
+      });
+    }
+  };
+
+  const applyCandidate = () => {
+    if (candidate === null) return;
+
+    onChange({
+      ...settings,
+      sensitivity: Math.max(
+        0.4,
+        Math.min(2.4, candidate / 0.35),
+      ),
+    });
+  };
+
+  return (
+    <main className="tool-page">
+      <header className="tool-header">
+        <button className="back-btn" onClick={onBack}>
+          AIM LAB
+        </button>
+
+        <div>
+          <p className="eyebrow">
+            SENSITIVITY LAB // CALIBRATION
+          </p>
+          <h1>감도 찾기</h1>
+        </div>
+
+        <div className="game-help">
+          eDPI {Math.round(edpi)}
+        </div>
+      </header>
+
+      <section className="tool-hero panel">
+        <div>
+          <p className="eyebrow">MOUSE CALIBRATION</p>
+
+          <h2>나에게 맞는 감도를 찾습니다.</h2>
+
+          <p>
+            현재 DPI와 감도를 입력하고 후보 감도를 비교한 뒤
+            3D 훈련에 적용하세요.
+          </p>
+        </div>
+
+        <div className="tool-hero-stats">
+          <span>
+            <small>eDPI</small>
+            <b>{Math.round(edpi)}</b>
+          </span>
+
+          <span>
+            <small>CM / 360</small>
+            <b>{cm360.toFixed(1)}</b>
+          </span>
+        </div>
+      </section>
+
+      <section className="tool-grid sensitivity-grid">
+        <article className="tool-card static">
+          <b>DPI</b>
+
+          <input
+            className="large-input"
+            type="number"
+            value={dpi}
+            onChange={(event) =>
+              setDpi(Number(event.target.value) || 800)
+            }
+          />
+
+          <span>마우스 DPI</span>
+        </article>
+
+        <article className="tool-card static">
+          <b>VALORANT SENS</b>
+
+          <input
+            className="large-input"
+            type="number"
+            min="0.05"
+            max="2"
+            step="0.01"
+            value={sens}
+            onChange={(event) =>
+              setSens(Number(event.target.value) || 0.35)
+            }
+          />
+
+          <span>게임 내 감도</span>
+        </article>
+      </section>
+
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">CANDIDATES</p>
+            <h2>후보 감도 비교</h2>
+          </div>
+        </div>
+
+        <div className="candidate-grid">
+          {candidates.map((value) => (
+            <button
+              key={value}
+              className={`candidate-card ${
+                candidate === value ? 'selected' : ''
+              }`}
+              onClick={() => start(value)}
+            >
+              <small>
+                {value === sens ? 'CURRENT' : 'CANDIDATE'}
+              </small>
+
+              <strong>{value.toFixed(3)}</strong>
+
+              <span>
+                eDPI {Math.round(dpi * value)}
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="section">
+        <div className="section-title">
+          <div>
+            <p className="eyebrow">
+              MICRO TEST // 10 TARGETS
+            </p>
+
+            <h2>
+              {running
+                ? `테스트 진행 ${total}/10`
+                : total >= 10
+                  ? '테스트 완료'
+                  : '후보를 선택하세요'}
+            </h2>
+          </div>
+        </div>
+
+        <div className="sensitivity-test panel">
+          {running && (
+            <button
+              className="sensitivity-target"
+              style={{
+                left: `${target.x}%`,
+                top: `${target.y}%`,
+              }}
+              onClick={hit}
+              aria-label="감도 테스트 타겟"
+            />
+          )}
+
+          {!running && (
+            <div className="sensitivity-test-empty">
+              {total >= 10
+                ? `선택 감도 ${candidate?.toFixed(3)} · 명중 ${hits}/${total}`
+                : '후보 감도를 하나 선택하면 10회 타겟 테스트가 시작됩니다.'}
+            </div>
+          )}
+        </div>
+
+        {candidate !== null && !running && total >= 10 && (
+          <div className="setup-row">
+            <div>
+              <span className="field-label">
+                테스트 정확도
+              </span>
+
+              <strong>
+                {Math.round((hits / total) * 100)}%
+              </strong>
+            </div>
+
+            <button
+              className="start-button"
+              onClick={applyCandidate}
+            >
+              이 감도를 3D에 적용
+            </button>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+function Results({
+  stats,
+  onAgain,
+  onHome,
+}: {
+  stats: RunStats;
+  onAgain: () => void;
+  onHome: () => void;
+}) {
+  const protocol =
+    stats.drill === 'flick'
+      ? '플릭 조준'
+      : stats.drill === 'tracking'
+        ? '트래킹 조준'
+        : '브레이킹';
+
+  return (
+    <div className="aim-app results-screen">
+      <div className="results-shell">
+        <div className="results-top">
+          <Brand />
+
+          <div className="results-kicker">
+            훈련 결과 / 3D AIM LAB
+          </div>
+        </div>
+
+        <div className="results-kicker">
+          {protocol} 훈련 완료
+        </div>
+
+        <h1 className="results-title">
+          기록
+          <br />
+          <span>저장되었습니다.</span>
+        </h1>
+
+        <p className="results-sub">
+          결과를 확인하고 다음 훈련에서 더 정밀하게
+          조준해보세요.
+        </p>
+
+        <div className="results-grid">
+          <div className="result-score">
+            <label>최종 점수</label>
+
+            <strong>
+              {stats.score.toLocaleString()}
+            </strong>
+
+            <small>
+              {stats.hits}회 명중 / {stats.shots}회 사격
+            </small>
+          </div>
+
+          <div className="result-metrics">
+            <div className="result-metric">
+              <label>명중률</label>
+              <strong>
+                {stats.accuracy.toFixed(1)}%
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>최고 연속 명중</label>
+              <strong>
+                {stats.streak
+                  .toString()
+                  .padStart(2, '0')}
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>훈련 시간</label>
+              <strong>
+                {stats.duration}초
+              </strong>
+            </div>
+
+            <div className="result-metric">
+              <label>프로토콜</label>
+              <strong>{protocol}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="result-actions">
+          <button
+            className="start-button"
+            onClick={onAgain}
+          >
+            <RotateCcw size={15} />
+            다시 훈련
+          </button>
+
+          <button
+            className="secondary-button"
+            onClick={onHome}
+          >
+            훈련 선택으로
+          </button>
+        </div>
+
+        <footer className="results-footer">
+          <span>
+            기록은 브라우저에 자동 저장됩니다
+          </span>
+
+          <span>
+            Sanghyeon / 3D Aim Lab
+          </span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+function GrowthPage({
+  history,
+  onBack,
+}: {
+  history: HistoryItem[];
+  onBack: () => void;
+}) {
+  const best = history.length
+    ? Math.max(...history.map((item) => item.score))
+    : 0;
+
+  const avg = history.length
+    ? Math.round(
+        history
+          .slice(0, 7)
+          .reduce((sum, item) => sum + item.score, 0) /
+          Math.min(7, history.length),
+      )
+    : 0;
+
+  const modules: Drill[] = [
+    'flick',
+    'tracking',
+    'braking',
+  ];
+
+  const moduleName = (type: Drill) => {
+    if (type === 'flick') return 'FLICK';
+    if (type === 'tracking') return 'TRACKING';
+    return 'BRAKING';
+  };
+
+  return (
+    <main className="tool-page">
+      <header className="tool-header">
+        <button className="back-btn" onClick={onBack}>
+          AIM LAB
+        </button>
+
+        <div>
+          <p className="eyebrow">
+            PROGRESS DATABASE // DETAILED
+          </p>
+
+          <h1>성장 기록</h1>
+        </div>
+
+        <div className="game-help">
+          {history.length} SESSIONS
+        </div>
+      </header>
+
+      <section className="growth-overview panel">
+        <div>
+          <p className="eyebrow">
+            WHAT AM I IMPROVING?
+          </p>
+
+          <h2>점수 하나만 보지 않습니다.</h2>
+
+          <p>
+            모드별 최고 기록과 최근 기록을 비교해서
+            훈련 흐름과 성장 추이를 확인합니다.
+          </p>
+        </div>
+
+        <div className="growth-overview-stats">
+          <span>
+            <small>SESSIONS</small>
+            <b>{history.length}</b>
+          </span>
+
+          <span>
+            <small>BEST</small>
+            <b>{best || '--'}</b>
+          </span>
+
+          <span>
+            <small>LAST 7 AVG</small>
+            <b>{avg || '--'}</b>
+          </span>
+        </div>
+      </section>
+
+      <section className="growth-cards">
+        {modules.map((type) => {
+          const rows = history.filter(
+            (item) => item.drill === type,
+          );
+
+          const bestType = rows.length
+            ? Math.max(...rows.map((item) => item.score))
+            : 0;
+
+          const last = rows[0];
+
+          return (
+            <article
+              className={`growth-module panel ${type}`}
+              key={type}
+            >
+              <div className="growth-module-head">
+                <span>{moduleName(type)}</span>
+                <b>{rows.length}회</b>
+              </div>
+
+              <div className="growth-main">
+                <strong>{bestType || '--'}</strong>
+                <small>BEST SCORE</small>
+              </div>
+
+              <div className="growth-detail-grid">
+                <div>
+                  <small>최근 점수</small>
+                  <b>{last?.score ?? '--'}</b>
+                </div>
+
+                <div>
+                  <small>최근 명중률</small>
+                  <b>
+                    {last
+                      ? `${last.accuracy.toFixed(1)}%`
+                      : '--'}
+                  </b>
+                </div>
+
+                <div>
+                  <small>최근 연속</small>
+                  <b>{last?.streak ?? '--'}</b>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </section>
+
+      <section className="growth-timeline panel">
+        {history.length ? (
+          history.map((record, index) => (
+            <div
+              className="growth-row"
+              key={`${record.date}-${record.score}-${index}`}
+            >
+              <time>{record.date}</time>
+
+              <b>{record.drill.toUpperCase()}</b>
+
+              <strong>{record.score}</strong>
+
+              <span>
+                {record.accuracy.toFixed(1)}% ACC ·{' '}
+                {record.hits ?? 0}/{record.shots ?? 0} HITS
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="empty">
+            아직 완료한 훈련 기록이 없습니다.
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function HomeRoute() {
+  const [view, setView] = useState<View>('home');
+  const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
+  const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
+  const [config, setConfig] = useState<{ drill: Drill; duration: number; difficulty: string }>({ drill: 'flick', duration: 30, difficulty: 'operator' });
+  const [results, setResults] = useState<RunStats | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
+  const start = (drill: Drill, duration: number, difficulty: string) => { setConfig({ drill, duration, difficulty }); setView('range'); };
+  const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+  if (view === 'home') return <><Home settings={settings} onSettings={() => setSettingsOpen(true)} onStart={start} history={history} onNavigate={setView} />{settingsOpen && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}</>;
+  if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
+  if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+  if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
+  return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
+}
+
+function Router() {
+  return <RoutedErrorBoundary><Switch><Route path="/" component={HomeRoute} /><Route component={NotFound} /></Switch></RoutedErrorBoundary>;
+}
+
+function RoutedErrorBoundary({ children }: { children: ReactNode }) {
+  const [location] = useLocation();
+  return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+}
+
+function App() {
+  return <QueryClientProvider client={queryClient}><TooltipProvider><WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}><Router /></WouterRouter><Toaster /></TooltipProvider></QueryClientProvider>;
+}
+
+export default App;
+
+
+

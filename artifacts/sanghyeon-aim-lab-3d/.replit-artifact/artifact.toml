@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Sanghyeon Aim Lab 3D"
+description = "A browser-based 3D aim training lab that turns the existing Sanghyeon 2D drills into an immersive first-person practice range with flick and tracking scenarios, performance telemetry, and local progress tracking."
+version = "1.0.0"
+id = "artifacts/sanghyeon-aim-lab-3d"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21812
+
+[services.development]
+run = "pnpm --filter @workspace/sanghyeon-aim-lab-3d run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/sanghyeon-aim-lab-3d", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/sanghyeon-aim-lab-3d/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21812"
+BASE_PATH = "/"
