@@ -1494,38 +1494,49 @@ function TrainingSetup({
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
           if (aimCoach) {
-            const target = targetMeshRef.current;
-            if (target) {
-              const box = new THREE.Box3().setFromObject(target);
-              const center = box.getCenter(new THREE.Vector3());
-              const top = new THREE.Vector3(center.x, box.max.y, center.z).project(camera);
-              const bottom = new THREE.Vector3(center.x, box.min.y, center.z).project(camera);
-              const screenHeight = renderer.domElement.clientHeight;
-              const headTopPx = (1 - top.y) * .5 * screenHeight;
-              const headBottomPx = (1 - bottom.y) * .5 * screenHeight;
-              const headMinPx = Math.min(headTopPx, headBottomPx);
-              const headMaxPx = Math.max(headTopPx, headBottomPx);
-              const crosshairY = screenHeight * .5;
-              const pixelPadding = 2;
+            // 피드백은 타겟의 머리/히트박스를 전혀 사용하지 않고,
+            // 고정된 월드 헤드라인 자체만 기준으로 계산합니다.
+            const screenHeight = renderer.domElement.clientHeight;
+            const cameraDirection = new THREE.Vector3();
+            camera.getWorldDirection(cameraDirection);
 
-              // 화면 Y 기준: 작을수록 위쪽입니다.
-              // 머리보다 위 = 에임이 너무 높음 / 머리보다 아래 = 에임이 너무 낮음.
-              const nextAimState: 'low' | 'high' | 'ok' =
-                crosshairY < headMinPx - pixelPadding
-                  ? 'high'
-                  : crosshairY > headMaxPx + pixelPadding
-                    ? 'low'
-                    : 'ok';
-
-              setAimCoachState(nextAimState);
-              setAimCoachWarning(nextAimState !== 'ok');
-              // 헤드라인은 타겟 위치와 무관하게 고정된 월드 높이입니다.
-              aimGuide.visible = true;
-            } else {
-              setAimCoachState('ok');
-              setAimCoachWarning(false);
-              aimGuide.visible = false;
+            // 현재 시선의 Z 위치에서 고정 헤드라인과 만나는 X를 구합니다.
+            // 따라서 좌우로 둘러봐도 같은 고정 헤드라인을 기준으로 합니다.
+            let headlineX = 0;
+            if (Math.abs(cameraDirection.z) > 0.0001) {
+              const t = (HEADLINE_Z - camera.position.z) / cameraDirection.z;
+              if (t > 0) {
+                headlineX = THREE.MathUtils.clamp(
+                  camera.position.x + cameraDirection.x * t,
+                  -HEADLINE_HALF_WIDTH,
+                  HEADLINE_HALF_WIDTH,
+                );
+              }
             }
+
+            const headlineScreen = new THREE.Vector3(
+              headlineX,
+              HEADLINE_Y,
+              HEADLINE_Z,
+            ).project(camera);
+            const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
+            const crosshairY = screenHeight * .5;
+            const pixelPadding = 4;
+            const deltaY = crosshairY - headlineYpx;
+
+            // 화면 Y: 작을수록 위쪽입니다.
+            // 크로스헤어가 고정 헤드라인보다 위 = 에임이 너무 높음.
+            // 크로스헤어가 고정 헤드라인보다 아래 = 에임이 너무 낮음.
+            const nextAimState: 'low' | 'high' | 'ok' =
+              Math.abs(deltaY) <= pixelPadding
+                ? 'ok'
+                : deltaY < 0
+                  ? 'high'
+                  : 'low';
+
+            setAimCoachState(nextAimState);
+            setAimCoachWarning(nextAimState !== 'ok');
+            aimGuide.visible = true;
           } else {
             setAimCoachState('ok');
             setAimCoachWarning(false);
@@ -1898,8 +1909,3 @@ function TrainingSetup({
       onChange({
         ...settings,
         sensitivity: Math.max(
-          0.4,
-          Math.min(2.4, candidate / 0.35),
-        ),
-      });
-    };
