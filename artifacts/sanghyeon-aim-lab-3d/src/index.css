@@ -1195,3 +1195,287 @@ body {
   .launch-choice-grid{grid-template-columns:repeat(3,1fr)}
   .training-mode-card{grid-template-columns:32px 1fr auto}
 }
+
+
+/* YEONHO-STYLE TRAINING SETUP POLISH */
+.setup-screen{
+  max-width:1120px;
+  padding:34px 34px 72px;
+}
+.setup-back{
+  margin-bottom:42px;
+  padding:0;
+  color:#7f8b97;
+  font:700 11px var(--app-font-mono);
+  letter-spacing:.08em;
+  transition:.15s;
+}
+.setup-back:hover{color:#a3ff27;transform:translateX(-3px)}
+.setup-header{
+  margin-bottom:52px;
+}
+.setup-eyebrow{
+  color:#66737e;
+  font:700 10px var(--app-font-mono);
+  letter-spacing:.16em;
+  margin-bottom:16px;
+}
+.setup-mode{
+  gap:18px;
+}
+.setup-mode-icon{
+  width:62px;
+  height:62px;
+  border:1px solid rgba(163,255,39,.22);
+  border-radius:8px;
+  background:#10171d;
+  box-shadow:0 0 30px rgba(163,255,39,.04);
+}
+.setup-mode h1{
+  font:800 clamp(34px,5vw,48px)/.95 var(--app-font-mono);
+  letter-spacing:-.045em;
+}
+.setup-mode p{
+  margin-top:10px;
+  color:#8b97a2;
+  font-size:12px;
+}
+.setup-section{
+  margin-bottom:42px;
+}
+.setup-section-head{
+  gap:14px;
+  margin-bottom:18px;
+}
+.setup-section-head>span{
+  min-width:24px;
+  color:#5e6b76;
+  font:700 10px var(--app-font-mono);
+  letter-spacing:.1em;
+}
+.setup-section-head h2{
+  font:800 17px var(--app-font-mono);
+  letter-spacing:.03em;
+}
+.setup-section-head p{
+  margin-top:6px;
+  color:#697681;
+  font-size:11px;
+}
+.difficulty-grid{
+  gap:10px;
+}
+.difficulty-card{
+  min-height:126px;
+  padding:20px;
+  border:1px solid #27323a;
+  border-radius:8px;
+  background:#0f151a;
+  box-shadow:none;
+}
+.difficulty-card:hover{
+  border-color:#4c5963;
+  background:#121a20;
+  transform:translateY(-2px);
+}
+.difficulty-card strong{
+  max-width:180px;
+  font-size:14px;
+  line-height:1.45;
+}
+.difficulty-card span{
+  margin-top:10px;
+  color:#74818c;
+  font-size:10px;
+}
+.difficulty-card b{
+  right:14px;
+  bottom:14px;
+  font:800 9px var(--app-font-mono);
+}
+.difficulty-card.selected{
+  box-shadow:inset 3px 0 0 #62d5a0,0 0 24px rgba(98,213,160,.045);
+}
+.mode-options{
+  gap:0;
+  border:1px solid #27323a;
+  border-radius:8px;
+  background:#0d1318;
+}
+.setup-mode-section .mode-options{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:0;
+  overflow:hidden;
+}
+.setup-mode-section .training-mode-card{
+  min-height:154px;
+  display:flex;
+  flex-direction:column;
+  align-items:flex-start;
+  justify-content:flex-start;
+  gap:0;
+  padding:20px;
+  border:0;
+  border-right:1px solid #27323a;
+  border-top:0;
+  background:#0f151a;
+}
+.setup-mode-section .training-mode-card:last-child{border-right:0}
+.setup-mode-section .training-mode-card:hover{background:#121a20}
+.setup-mode-section .training-mode-card.selected{
+  background:#14231f;
+  box-shadow:inset 0 3px 0 #62d5a0;
+}
+.setup-mode-section .training-mode-index{
+  color:#56636e;
+  font:800 10px var(--app-font-mono);
+}
+.setup-mode-section .training-mode-copy{
+  display:block;
+  margin-top:30px;
+}
+.setup-mode-section .training-mode-copy strong{
+  color:#dce5e8;
+  font:800 12px var(--app-font-mono);
+  letter-spacing:.1em;
+}
+.setup-mode-section .training-mode-copy b{
+  margin-top:8px;
+  color:#f2f5f6;
+  font-size:14px;
+}
+.setup-mode-section .training-mode-copy small{
+  max-width:220px;
+  margin-top:8px;
+  color:#75818b;
+  line-height:1.55;
+  font-size:10px;
+}
+.setup-mode-section .training-mode-check{
+  margin-top:auto;
+  color:#62d5a0;
+  font:800 9px var(--app-font-mono);
+  letter-spacing:.1em;
+}
+.feedback-section .mode-options{
+  display:grid;
+  grid-template-columns:repeat(2,1fr);
+  overflow:hidden;
+}
+.feedback-section .mode-option{
+  min-height:88px;
+  padding:18px 20px;
+  border:0;
+  border-right:1px solid #27323a;
+  background:#0f151a;
+}
+.feedback-section .mode-option:last-child{border-right:0}
+.feedback-section .mode-option:hover{background:#121a20}
+.feedback-section .mode-option.selected{
+  background:#14231f;
+  box-shadow:inset 3px 0 0 #62d5a0;
+}
+.feedback-section .mode-option strong{
+  font-size:12px;
+}
+.feedback-section .mode-option span:not(.option-on){
+  margin-top:7px;
+  color:#71808b;
+  font-size:10px;
+}
+.option-on{
+  margin-top:12px;
+  font:800 9px var(--app-font-mono)!important;
+  letter-spacing:.1em;
+}
+.duration-row{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:10px;
+}
+.duration-button{
+  width:auto;
+  height:76px;
+  padding:16px 18px;
+  text-align:left;
+  border:1px solid #27323a;
+  border-radius:8px;
+  background:#0f151a;
+  font:800 22px var(--app-font-mono);
+}
+.duration-button:hover{
+  border-color:#4c5963;
+  background:#121a20;
+}
+.duration-button.selected{
+  border-color:#62d5a0;
+  background:#14231f;
+  box-shadow:inset 3px 0 0 #62d5a0;
+}
+.duration-button small{
+  margin-left:7px;
+  color:#687681;
+  font:800 9px var(--app-font-mono);
+}
+.setup-footer{
+  margin-top:52px;
+  padding-top:22px;
+  border-top:1px solid #27323a;
+}
+.setup-footer span{
+  color:#5f6c77;
+  font:700 9px var(--app-font-mono);
+  letter-spacing:.14em;
+}
+.setup-footer strong{
+  margin-top:7px;
+  font:800 13px var(--app-font-mono);
+}
+.setup-start{
+  min-width:170px;
+  padding:15px 20px;
+  border-radius:7px;
+  background:#a3ff27;
+  color:#081007;
+  font:900 11px var(--app-font-mono);
+  letter-spacing:.06em;
+  box-shadow:0 8px 25px rgba(163,255,39,.08);
+}
+.setup-start:hover{
+  filter:brightness(1.05);
+  transform:translateY(-1px);
+}
+.setup-start span{
+  display:inline;
+  margin-left:20px;
+  color:inherit;
+  font-size:16px;
+}
+.setup-launch-modal{
+  border:1px solid #34434a;
+  background:#0d1318;
+  box-shadow:0 25px 80px rgba(0,0,0,.55);
+}
+.launch-kicker{
+  color:#a3ff27;
+}
+.launch-choice-grid button{
+  border-color:#2d3a42;
+  background:#0f171c;
+}
+.launch-choice-grid button:hover,
+.launch-choice-grid button.selected{
+  border-color:#a3ff27;
+  background:#14231f;
+  color:#a3ff27;
+}
+@media(max-width:800px){
+  .setup-mode-section .mode-options{grid-template-columns:1fr}
+  .setup-mode-section .training-mode-card{border-right:0;border-bottom:1px solid #27323a}
+  .setup-mode-section .training-mode-card:last-child{border-bottom:0}
+  .feedback-section .mode-options{grid-template-columns:1fr}
+  .feedback-section .mode-option{border-right:0;border-bottom:1px solid #27323a}
+  .feedback-section .mode-option:last-child{border-bottom:0}
+  .duration-row{grid-template-columns:1fr}
+}
