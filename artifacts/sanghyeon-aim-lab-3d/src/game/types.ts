@@ -1,5 +1,6 @@
 export type Drill = 'flick' | 'tracking' | 'braking';
 export type FlickMode = 'random' | 'headline' | 'robot';
+export type TrainingMapId = 'range' | 'corridor' | 'arena';
 
 export type TrainingConfig = {
   drill: Drill;
@@ -9,6 +10,8 @@ export type TrainingConfig = {
   aimCoach: boolean;
   flickBotCount: number;
   flickMode: FlickMode;
+  customTargetSize?: number;
+  customTargetSpeed?: number;
 };
 
 export type View =

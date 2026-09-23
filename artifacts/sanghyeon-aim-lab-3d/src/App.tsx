@@ -8,7 +8,8 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, X } from 'lucide-react';
 import * as THREE from 'three';
 import { CROSSHAIR_PRESETS, DEFAULT_CROSSHAIR, DEFAULT_KEYBINDS, DEFAULT_SETTINGS, normalizeSettings, WEAPONS } from './game/config';
-import type { CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, View, WeaponId } from './game/types';
+import { TRAINING_MAPS, buildTrainingWorld } from './game/trainingMaps';
+import type { CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId } from './game/types';
 import { readStorage, saveStorage } from './persistence/storage';
 
 const queryClient = new QueryClient();
@@ -302,6 +303,7 @@ function Home({
   onNavigate,
   onSettingsChange,
   onSelectDrill,
+  onEnterRange,
 }: {
   settings: Settings;
   onSettings: () => void;
@@ -310,6 +312,7 @@ function Home({
   onNavigate: (view: View) => void;
   onSettingsChange: (next: Settings) => void;
   onSelectDrill: (drill: Drill) => void;
+  onEnterRange: () => void;
 }) {
   const [drill, setDrill] = useState<Drill>('flick');
 
@@ -376,6 +379,9 @@ function Home({
               <br />
               에임 감각을 빠르게 끌어올리세요.
             </p>
+            <button className="facility-entry-button" onClick={onEnterRange}>
+              훈련 시설 입장 <span>ENTER FACILITY ↗</span>
+            </button>
           </section>
 
           <section className="training-section">
@@ -397,7 +403,7 @@ function Home({
                   <button
                     key={type}
                     className={`drill-card ${selected ? 'selected' : ''} ${item.active ? '' : 'disabled'}`}
-                  onClick={() => item.active && onSelectDrill(type)}
+                    onClick={() => { if (item.active) { setDrill(type); onSelectDrill(type); } }}
                   >
                     <div className="drill-card-top">
                       <span className="drill-number">
@@ -440,9 +446,9 @@ function Home({
           </div>
           <h2 className="panel-title">빠른 설정</h2>
           <div className="quick-action-grid">
-            <button onClick={() => onSelectDrill(drill)}>
+            <button onClick={onEnterRange}>
               <span>🎯</span>
-              <div><strong>지금 훈련하기</strong><small>선택한 훈련 바로 시작</small></div>
+              <div><strong>훈련 시설 입장</strong><small>터미널에서 훈련을 준비합니다</small></div>
               <b>→</b>
             </button>
             <button onClick={() => onNavigate('sensitivity')}>
@@ -709,16 +715,28 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, customTargetSize = 0.4, customTargetSpeed = 1, mapId, onMapChange, onConfigChange, onLeave, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; customTargetSize?: number; customTargetSpeed?: number; mapId: TrainingMapId; onMapChange: (map: TrainingMapId) => void; onConfigChange: (config: TrainingConfig) => void; onLeave: () => void; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
-    const statusRef = useRef<RunStatus>('active');
-    const [status, setStatus] = useState<RunStatus>('active');
+    const statusRef = useRef<RunStatus>('paused');
+    const [status, setStatus] = useState<RunStatus>('paused');
     const [timeLeft, setTimeLeft] = useState(duration);
     const [stats, setStats] = useState(statsRef.current);
     const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
+    const [terminalOpen, setTerminalOpen] = useState(true);
+    const [terminalMap, setTerminalMap] = useState<TrainingMapId>(mapId);
+    const [terminalDrill, setTerminalDrill] = useState<Drill>(drill);
+    const [terminalDuration, setTerminalDuration] = useState(duration);
+    const [terminalDifficulty, setTerminalDifficulty] = useState(difficulty);
+    const [terminalFeedback, setTerminalFeedback] = useState(feedbackEnabled);
+    const [terminalAimCoach, setTerminalAimCoach] = useState(aimCoach);
+    const [terminalFlickMode, setTerminalFlickMode] = useState<FlickMode>(flickMode);
+    const [terminalTargetCount, setTerminalTargetCount] = useState(flickBotCount);
+    const [terminalTargetSize, setTerminalTargetSize] = useState(customTargetSize);
+    const [terminalTargetSpeed, setTerminalTargetSpeed] = useState(customTargetSpeed);
+    const [hasStarted, setHasStarted] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
     const pointerLockBlockedUntilRef = useRef(0);
     const pointerLockRequestPendingRef = useRef(false);
@@ -738,7 +756,39 @@ function TrainingSetup({
     const walkRef = useRef(false);
     const aimCoachStampRef = useRef(0);
     const sensitivityRef = useRef(settings.sensitivity);
-    const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'hell' ? 0.25 : difficulty === 'elite' ? 0.31 : 0.42;
+    const difficultySize = difficulty === 'foundation' || difficulty === 'trainee' ? 0.55 : difficulty === 'pressure' || difficulty === 'hell' ? 0.27 : difficulty === 'custom' ? terminalTargetSize : 0.4;
+    const map = TRAINING_MAPS.find((item) => item.id === mapId) ?? TRAINING_MAPS[0];
+    const openTrainingTerminal = useCallback(() => {
+      statusRef.current = 'paused';
+      setStatus('paused');
+      setTerminalOpen(true);
+      document.exitPointerLock?.();
+    }, []);
+    const launchTraining = () => {
+      const nextConfig: TrainingConfig = {
+        drill: terminalDrill,
+        duration: terminalDuration,
+        difficulty: terminalDifficulty,
+        feedbackEnabled: terminalFeedback,
+        aimCoach: terminalAimCoach,
+        flickBotCount: terminalTargetCount,
+        flickMode: terminalFlickMode,
+        customTargetSize: terminalTargetSize,
+        customTargetSpeed: terminalTargetSpeed,
+      };
+      onMapChange(terminalMap);
+      onConfigChange(nextConfig);
+      statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0 };
+      setStats(statsRef.current);
+      reactionSamplesRef.current = [];
+      timeRef.current = terminalDuration;
+      setTimeLeft(terminalDuration);
+      setFeedback(null);
+      statusRef.current = 'active';
+      setStatus('active');
+      setTerminalOpen(false);
+      setHasStarted(true);
+    };
     const finish = useCallback(() => {
       if (statusRef.current === 'done') return;
       statusRef.current = 'done';
@@ -754,8 +804,8 @@ function TrainingSetup({
       const mount = mountRef.current;
       if (!mount) return;
       const scene = new THREE.Scene();
-      scene.background = new THREE.Color('#081116');
-      scene.fog = new THREE.Fog('#081116', 8, 34);
+      scene.background = new THREE.Color('#aeb8b5');
+      scene.fog = new THREE.Fog('#aeb8b5', 30, 62);
       const camera = new THREE.PerspectiveCamera(70.53, mount.clientWidth / mount.clientHeight, 0.1, 100);
       camera.position.set(0, 1.6, 6);
       camera.rotation.order = 'YXZ';
@@ -763,13 +813,23 @@ function TrainingSetup({
       let pitch = -0.02;
       camera.rotation.set(pitch, yaw, 0);
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); renderer.setSize(mount.clientWidth, mount.clientHeight); renderer.shadowMap.enabled = true; mount.appendChild(renderer.domElement);
-      scene.add(new THREE.HemisphereLight('#bfd5d0', '#10171a', 1.7));
-      const key = new THREE.DirectionalLight('#d8ffab', 3); key.position.set(-3, 8, 5); key.castShadow = true; scene.add(key);
-      const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#111c21', roughness: .88, metalness: .2 })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
-      const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
-      const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
-      const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -10.5); scene.add(backWall);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+      renderer.setSize(mount.clientWidth, mount.clientHeight);
+      renderer.shadowMap.enabled = true;
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+      mount.appendChild(renderer.domElement);
+      scene.add(new THREE.HemisphereLight('#f4f2e8', '#4a4e4b', 2.15));
+      const key = new THREE.DirectionalLight('#ffe2bd', 2.5);
+      key.position.set(-7, 11, 8);
+      key.castShadow = true;
+      key.shadow.mapSize.set(1024, 1024);
+      key.shadow.camera.left = -18;
+      key.shadow.camera.right = 18;
+      key.shadow.camera.top = 18;
+      key.shadow.camera.bottom = -18;
+      scene.add(key);
+      scene.add(new THREE.AmbientLight('#dce5de', 0.48));
+      const world = buildTrainingWorld(scene, mapId);
       const HEADLINE_Y = 1.65;
       const HEADLINE_Z = -9.0;
       const HEADLINE_HALF_WIDTH = 12.5;
@@ -777,41 +837,12 @@ function TrainingSetup({
         new THREE.Vector3(-HEADLINE_HALF_WIDTH, HEADLINE_Y, HEADLINE_Z),
         new THREE.Vector3(HEADLINE_HALF_WIDTH, HEADLINE_Y, HEADLINE_Z),
       ]);
-      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: .32, depthTest: false });
+      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#bbdfc3', transparent: true, opacity: .46, depthTest: false });
       const aimGuide = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
       aimGuide.visible = aimCoach;
       aimGuide.renderOrder = 20;
       scene.add(aimGuide);
       aimCoachGuideRef.current = aimGuide;
-      const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
-      const rightWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); rightWall.position.set(13, 3.5, -1); scene.add(rightWall);
-      const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#0b151a', roughness: 1, metalness: .05 })); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 7; scene.add(ceiling);
-      const facilityAccent = new THREE.MeshStandardMaterial({ color: '#182a30', roughness: .55, metalness: .55 });
-      const accent = new THREE.MeshStandardMaterial({ color: '#8fff35', emissive: '#315c16', emissiveIntensity: .75, roughness: .3 });
-      [-8, -4, 0, 4, 8].forEach((x) => {
-        const pillar = new THREE.Mesh(new THREE.BoxGeometry(.22, 6.8, .22), facilityAccent);
-        pillar.position.set(x, 3.4, -10.25);
-        scene.add(pillar);
-        const strip = new THREE.Mesh(new THREE.BoxGeometry(.08, 4.8, .03), accent);
-        strip.position.set(x, 3.35, -10.08);
-        scene.add(strip);
-      });
-      [0, 5, 10, 15, 20].forEach((distance) => {
-        const z = Math.max(-9.8, 4.8 - distance);
-        const line = new THREE.Mesh(new THREE.BoxGeometry(21, .025, .035), accent);
-        line.position.set(0, .025, z);
-        scene.add(line);
-      });
-      const rangeLights = [-10, -6, -2, 2, 6, 10].map((x) => {
-        const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.5, .04, .06), new THREE.MeshBasicMaterial({ color: '#a3ff27' }));
-        lamp.position.set(x, 6.6, -6.7);
-        scene.add(lamp);
-        const light = new THREE.PointLight('#9cff4d', 2.2, 8, 2);
-        light.position.set(x, 6.1, -6.5);
-        scene.add(light);
-        return lamp;
-      });
-      void rangeLights;
       const group = new THREE.Group(); scene.add(group);
 
       // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
@@ -840,7 +871,7 @@ function TrainingSetup({
       weapon.add(barrel);
       const sight = new THREE.Mesh(
         new THREE.BoxGeometry(.055, .045, .16),
-        new THREE.MeshStandardMaterial({ color: '#7dff39', emissive: '#406d20', emissiveIntensity: .7, roughness: .3 })
+        new THREE.MeshStandardMaterial({ color: '#b5c6a0', emissive: '#53654a', emissiveIntensity: .18, roughness: .44 })
       );
       sight.position.set(0, .105, -.25);
       weapon.add(sight);
@@ -863,7 +894,7 @@ function TrainingSetup({
         const start = new THREE.Vector3();
         muzzleFlash.getWorldPosition(start);
         const geometry = new THREE.BufferGeometry().setFromPoints([start, end]);
-        const material = new THREE.LineBasicMaterial({ color: '#eaff9a', transparent: true, opacity: .9 });
+        const material = new THREE.LineBasicMaterial({ color: '#f1d7ad', transparent: true, opacity: .84 });
         const tracer = new THREE.Line(geometry, material);
         scene.add(tracer);
         window.setTimeout(() => {
@@ -890,6 +921,14 @@ function TrainingSetup({
         }
         return true;
       };
+      const sightRaycaster = new THREE.Raycaster();
+      const hasClearLineOfSight = (point: THREE.Vector3) => {
+        const direction = point.clone().sub(camera.position);
+        const distance = direction.length();
+        sightRaycaster.set(camera.position, direction.normalize());
+        const firstBlocker = sightRaycaster.intersectObjects(world.bulletBlockers, true)[0];
+        return !firstBlocker || firstBlocker.distance > distance - 0.45;
+      };
       const findFlickPosition = (radius: number) => {
         for (let attempt = 0; attempt < 80; attempt += 1) {
           const ndcX = THREE.MathUtils.randFloat(-0.86, 0.86);
@@ -900,15 +939,16 @@ function TrainingSetup({
           point.x = THREE.MathUtils.clamp(point.x, -11.3 + radius, 11.3 - radius);
           point.y = THREE.MathUtils.clamp(point.y, 0.9, 4.9);
           point.z = THREE.MathUtils.clamp(point.z, -9.9, -1.8);
-          if (isPositionClear(point.x, point.y, point.z, radius)) return point;
+          if (isPositionClear(point.x, point.y, point.z, radius) && hasClearLineOfSight(point)) return point;
         }
-        return new THREE.Vector3(0, 1.65, -8);
+        return new THREE.Vector3(0, 1.65, -7);
       };
       const findRobotPosition = (radius: number) => {
         for (let attempt = 0; attempt < 100; attempt += 1) {
           const x = THREE.MathUtils.randFloat(-11, 11);
           const z = THREE.MathUtils.randFloat(-9.15, -2.2);
-          if (isPositionClear(x, 0, z, radius)) return new THREE.Vector3(x, 0, z);
+          const point = new THREE.Vector3(x, 1.65, z);
+          if (isPositionClear(x, 0, z, radius) && hasClearLineOfSight(point)) return new THREE.Vector3(x, 0, z);
         }
         return new THREE.Vector3(0, 0, -8);
       };
@@ -916,8 +956,8 @@ function TrainingSetup({
         const root = new THREE.Group();
         const armorMat = new THREE.MeshStandardMaterial({ color: '#2b2d35', roughness: .4, metalness: .8 });
         const darkMat = new THREE.MeshStandardMaterial({ color: '#15171a', roughness: .6, metalness: .9 });
-        const redAccentMat = new THREE.MeshStandardMaterial({ color: '#ff4655', emissive: '#ff2222', emissiveIntensity: .8, roughness: .3 });
-        const whiteHeadMat = new THREE.MeshStandardMaterial({ color: '#dce2eb', roughness: .2, metalness: .5, emissive: '#88aacc', emissiveIntensity: .2 });
+        const redAccentMat = new THREE.MeshStandardMaterial({ color: '#a3ad82', emissive: '#39432e', emissiveIntensity: .12, roughness: .48 });
+        const whiteHeadMat = new THREE.MeshStandardMaterial({ color: '#e1ddd1', roughness: .36, metalness: .32 });
         const neck = new THREE.Mesh(new THREE.CylinderGeometry(.08,.1,.15,8),darkMat); neck.name='body'; neck.position.y=1.47;
         const head = new THREE.Mesh(new THREE.BoxGeometry(.24,.28,.24),whiteHeadMat); head.name='head'; head.position.y=1.65;
         const headTop = new THREE.Mesh(new THREE.BoxGeometry(.20,.05,.22),redAccentMat); headTop.name='body'; headTop.position.set(0,.15,0); head.add(headTop);
@@ -947,7 +987,7 @@ function TrainingSetup({
           const root = flickMode === 'random' ? new THREE.Group() : buildRobot();
           if (flickMode === 'random') {
             const radius=difficultySize;
-            const sphere=new THREE.Mesh(new THREE.SphereGeometry(radius,24,24),new THREE.MeshStandardMaterial({color:'#ff4655',emissive:'#7a111b',emissiveIntensity:.55,roughness:.35,metalness:.25}));
+            const sphere=new THREE.Mesh(new THREE.SphereGeometry(radius,24,24),new THREE.MeshStandardMaterial({color:'#ca8969',emissive:'#4d291f',emissiveIntensity:.16,roughness:.52,metalness:.12}));
             sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.position.copy(findFlickPosition(radius));
           } else {
             const pos=findRobotPosition(.72); root.position.set(pos.x,HEADLINE_Y-1.65,pos.z);
@@ -956,7 +996,10 @@ function TrainingSetup({
         }
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root=buildRobot(); const robotRootY=HEADLINE_Y-1.65;
-        if(drill==='braking') root.position.set((Math.random()-.5)*8,robotRootY,-8-Math.random()*1.5);
+        if (drill === 'braking') {
+          const position = findRobotPosition(.72);
+          root.position.set(position.x, robotRootY, position.z);
+        }
         else root.position.set(0,robotRootY,-9);
         group.add(root); targetRootRef.current=root; targetMeshRef.current=root.userData.head as THREE.Mesh; brakingMovedRef.current=false;
       };
@@ -1000,9 +1043,13 @@ function TrainingSetup({
         if (document.pointerLockElement !== renderer.domElement) return;
 
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-        const intersections = targetRootRef.current
+        const allTargetIntersections = targetRootRef.current
           ? raycaster.intersectObject(targetRootRef.current, true)
           : [];
+        const firstBlocker = raycaster.intersectObjects(world.bulletBlockers, true)[0];
+        const intersections = firstBlocker
+          ? allTargetIntersections.filter((item) => item.distance <= firstBlocker.distance + 0.02)
+          : allTargetIntersections;
 
         const hitObject = intersections[0]?.object ?? null;
         const hitHead = intersections.find((item) =>
@@ -1077,13 +1124,11 @@ function TrainingSetup({
             100 *
             (1 + Math.min(next.streak, 15) * .08) *
             (1 + stopQuality * .5) *
-            (difficulty === 'hell'
-              ? 1.55
-              : difficulty === 'elite'
-                ? 1.35
-                : difficulty === 'trainee'
-                ? .8
-                : 1)
+            (difficulty === 'pressure' || difficulty === 'hell'
+              ? 1.35
+              : difficulty === 'foundation' || difficulty === 'trainee'
+                ? 0.9
+                : 1.12)
           );
 
           next.score += points;
@@ -1137,6 +1182,11 @@ function TrainingSetup({
         setStats({ ...next });
       };
       const onKeyDown = (event: KeyboardEvent) => {
+        if (event.code === 'KeyT' && !event.repeat) {
+          event.preventDefault();
+          openTrainingTerminal();
+          return;
+        }
         const allowed = new Set(Object.values(settings.keybinds));
         if (allowed.has(event.code)) {
           keys.add(event.code);
@@ -1198,8 +1248,23 @@ function TrainingSetup({
           camera.position.y += (targetEye - camera.position.y) * (1 - Math.exp(-18 * Math.min(delta, .05)));
         }
 
-        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
-        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
+        const playerRadius = 0.34;
+        camera.position.x = THREE.MathUtils.clamp(camera.position.x, -14.05, 14.05);
+        camera.position.z = THREE.MathUtils.clamp(camera.position.z, -14.05, 9.05);
+        for (const collider of world.colliders) {
+          const insideX = camera.position.x > collider.minX - playerRadius && camera.position.x < collider.maxX + playerRadius;
+          const insideZ = camera.position.z > collider.minZ - playerRadius && camera.position.z < collider.maxZ + playerRadius;
+          if (!insideX || !insideZ) continue;
+          const toLeft = camera.position.x - (collider.minX - playerRadius);
+          const toRight = collider.maxX + playerRadius - camera.position.x;
+          const toNear = camera.position.z - (collider.minZ - playerRadius);
+          const toFar = collider.maxZ + playerRadius - camera.position.z;
+          if (Math.min(toLeft, toRight) < Math.min(toNear, toFar)) {
+            camera.position.x += toLeft < toRight ? toLeft : -toRight;
+          } else {
+            camera.position.z += toNear < toFar ? toNear : -toFar;
+          }
+        }
       };
       // 최초 진입 시 타겟을 반드시 생성합니다.
       // Flick은 선택한 동시 소환 수만큼, Tracking/Braking은 1개를 생성합니다.
@@ -1280,7 +1345,7 @@ function TrainingSetup({
             // Valorant-style strafing: the bot stays grounded and moves in
             // unpredictable left/right bursts instead of floating in an orbit.
             const root = targetRootRef.current;
-            const maxX = difficulty === 'hell' ? 3.0 : difficulty === 'elite' ? 3.15 : difficulty === 'trainee' ? 3.9 : 3.55;
+            const maxX = difficulty === 'pressure' || difficulty === 'hell' ? 3.0 : difficulty === 'foundation' || difficulty === 'trainee' ? 3.9 : 3.5;
             const tracking = trackingState;
 
             // Pick a new strafe direction after each segment. Same-direction
@@ -1298,7 +1363,7 @@ function TrainingSetup({
 
             const distanceToEdge = maxX - Math.abs(root.position.x);
             const edgeSlowdown = THREE.MathUtils.clamp(distanceToEdge / .8, .22, 1);
-            const targetSpeed = (difficulty === 'hell' ? 3.25 : difficulty === 'elite' ? 2.7 : 3.05) * edgeSlowdown;
+            const targetSpeed = (difficulty === 'pressure' || difficulty === 'hell' ? 3.4 : difficulty === 'foundation' || difficulty === 'trainee' ? 2.5 : 3.05) * (difficulty === 'custom' ? terminalTargetSpeed : 1) * edgeSlowdown;
             const accel = 10.5;
             tracking.velocity = THREE.MathUtils.damp(tracking.velocity, tracking.direction * targetSpeed, accel, delta);
 
@@ -1343,10 +1408,43 @@ function TrainingSetup({
         aimCoachGuideRef.current = null;
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
-        cancelAnimationFrame(frame); document.removeEventListener('mousemove', onPointerMove); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); document.removeEventListener('mousedown', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); renderer.dispose(); if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement); };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode]);
+        cancelAnimationFrame(frame);
+        document.removeEventListener('mousemove', onPointerMove);
+        document.removeEventListener('keydown', onKeyDown);
+        document.removeEventListener('keyup', onKeyUp);
+        document.removeEventListener('mousedown', onCanvasClick);
+        document.removeEventListener('pointerlockchange', onPointerLockChange);
+        window.removeEventListener('blur', onBlur);
+        window.removeEventListener('resize', resize);
+        const disposedGeometry = new Set<THREE.BufferGeometry>();
+        const disposedMaterials = new Set<THREE.Material>();
+        scene.traverse((object) => {
+          if ('geometry' in object && object.geometry instanceof THREE.BufferGeometry && !disposedGeometry.has(object.geometry)) {
+            disposedGeometry.add(object.geometry);
+            object.geometry.dispose();
+          }
+          if ('material' in object && object.material) {
+            const materials = Array.isArray(object.material) ? object.material : [object.material];
+            materials.forEach((current) => {
+              if (!disposedMaterials.has(current)) {
+                disposedMaterials.add(current);
+                current.dispose();
+              }
+            });
+          }
+        });
+        renderer.renderLists.dispose();
+        renderer.dispose();
+        if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
+      };
+    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed]);
 
     useEffect(() => {
+      if (duration === 0) {
+        timeRef.current = 0;
+        setTimeLeft(0);
+        return;
+      }
       const timer = window.setInterval(() => {
         if (statusRef.current !== 'active') return;
         timeRef.current = Math.max(0, timeRef.current - .1);
@@ -1354,7 +1452,7 @@ function TrainingSetup({
         if (timeRef.current <= 0) finish();
       }, 100);
       return () => window.clearInterval(timer);
-    }, [finish]);
+    }, [finish, duration]);
     const togglePause = () => {
       const next = statusRef.current === 'active' ? 'paused' : 'active';
       if (next === 'paused') setPointerLocked(false);
@@ -1364,6 +1462,17 @@ function TrainingSetup({
     const exit = () => {
       pointerLockBlockedUntilRef.current = Date.now() + 1000;
       finish();
+    };
+    const closeTerminal = () => {
+      setTerminalOpen(false);
+      if (hasStarted) {
+        statusRef.current = 'active';
+        setStatus('active');
+      }
+    };
+    const leaveTerminal = () => {
+      if (hasStarted) closeTerminal();
+      else onLeave();
     };
     return (
       <div className="range-screen">
@@ -1378,6 +1487,8 @@ function TrainingSetup({
             <div className="hud-brand">
               <b>SANGHYEON 01</b>
               {' / '}
+              {map.callout}
+              {' / '}
               {drill === 'flick'
                 ? '플릭 조준'
                 : drill === 'tracking'
@@ -1387,6 +1498,14 @@ function TrainingSetup({
             </div>
 
             <div className="hud-actions">
+              <button
+                className="hud-button terminal-open-button"
+                onClick={openTrainingTerminal}
+                aria-label="훈련 터미널 열기"
+                title="훈련 터미널 · T"
+              >
+                <Keyboard size={16} />
+              </button>
               <button
                 className="hud-button"
                 onClick={() => setSettingsOpen(true)}
@@ -1453,7 +1572,7 @@ function TrainingSetup({
           >
             <label>남은 시간</label>
             <strong data-testid="telemetry-time">
-              {timeLeft.toFixed(1)}초
+              {duration === 0 ? '무제한' : `${timeLeft.toFixed(1)}초`}
             </strong>
           </div>
 
@@ -1537,6 +1656,7 @@ function TrainingSetup({
               <kbd>SPACE</kbd>
               <span>점프</span>
               <span>마우스 시점 / 클릭 사격</span>
+              <kbd>T</kbd><span>터미널</span>
             </div>
 
             <div className="range-status">
@@ -1549,17 +1669,17 @@ function TrainingSetup({
               />
               시작 프로토콜{' '}
               <b>
-                {difficulty === 'trainee'
-                  ? '연습생'
-                  : difficulty === 'elite'
-                    ? '엘리트'
-                    : '요원'}
+                {difficulty === 'foundation'
+                  ? '기본기'
+                  : difficulty === 'pressure'
+                    ? '압박'
+                    : '실전'}
               </b>
             </div>
           </div>
         </div>
 
-        {status === 'paused' && (
+        {status === 'paused' && !terminalOpen && (
           <div className="modal-dim">
             <div className="pause-modal">
               <Pause
@@ -1598,6 +1718,113 @@ function TrainingSetup({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {terminalOpen && (
+          <div className="facility-terminal-overlay" role="dialog" aria-modal="true" aria-label="훈련 시설 터미널">
+            <section className="facility-terminal">
+              <header className="facility-terminal-header">
+                <div>
+                  <span className="facility-terminal-kicker">SANGHYEON TRAINING FACILITY · CONTROL LINK 01</span>
+                  <h1>훈련 터미널</h1>
+                  <p>공간을 선택하고 오늘의 훈련을 준비하세요.</p>
+                </div>
+                <button className="terminal-close" onClick={leaveTerminal} aria-label="터미널 닫기"><X size={19} /></button>
+              </header>
+
+              <section className="terminal-section">
+                <div className="terminal-section-heading"><span>01</span><div><b>훈련 구역</b><small>이동을 누르면 선택한 구역으로 바로 이동합니다.</small></div></div>
+                <div className="terminal-map-grid">
+                  {TRAINING_MAPS.map((item, index) => (
+                    <article key={item.id} className={`terminal-map-card ${terminalMap === item.id ? 'selected' : ''}`}>
+                      <span className="terminal-map-index">0{index + 1} / {item.callout}</span>
+                      <strong>{item.name}</strong>
+                      <p>{item.description}</p>
+                      <button onClick={() => { setTerminalMap(item.id); onMapChange(item.id); }}>{terminalMap === item.id ? '현재 구역' : '구역 이동'}</button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="terminal-section terminal-training-options">
+                <div className="terminal-section-heading"><span>02</span><div><b>훈련 프로토콜</b><small>플릭 · 트래킹 · 브레이킹</small></div></div>
+                <div className="terminal-drill-row">
+                  {([
+                    ['flick', 'FLICK', '정밀 조준'],
+                    ['tracking', 'TRACKING', '움직임 추적'],
+                    ['braking', 'BRAKING', '이동 후 정지 사격'],
+                  ] as const).map(([id, title, detail]) => (
+                    <button key={id} className={terminalDrill === id ? 'selected' : ''} onClick={() => setTerminalDrill(id)}>
+                      <b>{title}</b><small>{detail}</small>
+                    </button>
+                  ))}
+                </div>
+
+                <div className="terminal-setting-grid">
+                  <div className="terminal-setting-block">
+                    <b>난이도</b>
+                    <div className="terminal-chip-row">
+                      {([
+                        ['foundation', '기본기'],
+                        ['duel', '실전'],
+                        ['pressure', '압박'],
+                        ['custom', '직접 설정'],
+                      ] as const).map(([value, label]) => (
+                        <button key={value} className={terminalDifficulty === value ? 'selected' : ''} onClick={() => setTerminalDifficulty(value)}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="terminal-setting-block">
+                    <b>세션 시간</b>
+                    <div className="terminal-chip-row">
+                      {([[30, '30초'], [60, '60초'], [120, '120초'], [0, '무제한']] as const).map(([value, label]) => (
+                        <button key={value} className={terminalDuration === value ? 'selected' : ''} onClick={() => setTerminalDuration(value)}>{label}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {terminalDifficulty === 'custom' && (
+                  <div className="terminal-setting-grid terminal-custom-settings">
+                    <label className="terminal-range-setting"><span>타겟 크기 <b>{terminalTargetSize.toFixed(2)}</b></span><input type="range" min="0.2" max="0.65" step="0.01" value={terminalTargetSize} onChange={(event) => setTerminalTargetSize(Number(event.target.value))} /></label>
+                    <label className="terminal-range-setting"><span>타겟 속도 <b>{terminalTargetSpeed.toFixed(1)}×</b></span><input type="range" min="0.5" max="1.8" step="0.1" value={terminalTargetSpeed} onChange={(event) => setTerminalTargetSpeed(Number(event.target.value))} /></label>
+                  </div>
+                )}
+
+                {terminalDrill === 'flick' && (
+                  <div className="terminal-setting-grid terminal-flick-settings">
+                    <div className="terminal-setting-block">
+                      <b>타겟 유형</b>
+                      <div className="terminal-chip-row">
+                        {([
+                          ['random', '구형 표적'],
+                          ['headline', '헤드라인 봇'],
+                          ['robot', '훈련봇'],
+                        ] as const).map(([value, label]) => (
+                          <button key={value} className={terminalFlickMode === value ? 'selected' : ''} onClick={() => setTerminalFlickMode(value)}>{label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="terminal-setting-block">
+                      <b>동시 타겟 <strong>{terminalTargetCount}</strong></b>
+                      <input type="range" min="1" max="7" step="1" value={terminalTargetCount} onChange={(event) => setTerminalTargetCount(Number(event.target.value))} />
+                    </div>
+                  </div>
+                )}
+
+                <div className="terminal-toggle-row">
+                  <label><input type="checkbox" checked={terminalFeedback} onChange={(event) => setTerminalFeedback(event.target.checked)} /> 명중 피드백</label>
+                  <label><input type="checkbox" checked={terminalAimCoach} onChange={(event) => setTerminalAimCoach(event.target.checked)} /> 실시간 에임 코치</label>
+                  <span>무기: {WEAPONS[settings.weapon].name} · 설정에서 변경</span>
+                </div>
+              </section>
+
+              <footer className="facility-terminal-footer">
+                <span><b>{map.name}</b> / {terminalDrill.toUpperCase()} / {terminalDuration === 0 ? '무제한' : `${terminalDuration}초`}</span>
+                <button className="terminal-launch" onClick={launchTraining}>훈련 시작 <span>→</span></button>
+              </footer>
+            </section>
           </div>
         )}
 
@@ -2148,14 +2375,15 @@ function TrainingSetup({
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random' });
+    const [mapId, setMapId] = useState<TrainingMapId>('range');
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'duel', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random' });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
-    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
+    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); }} onEnterRange={() => setView('range')} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
-    if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
+    if (view === 'range') return <RangeScene {...config} mapId={mapId} onMapChange={setMapId} onConfigChange={setConfig} onLeave={() => setView('home')} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
     if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
