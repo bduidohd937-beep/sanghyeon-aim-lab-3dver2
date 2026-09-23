@@ -867,7 +867,6 @@ function TrainingSetup({
             </button>
           </div>
         </section>
-        </section>
 
         <section className="setup-section compact">
           <div className="setup-section-head">
