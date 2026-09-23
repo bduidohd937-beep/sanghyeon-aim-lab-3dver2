@@ -1285,7 +1285,7 @@ function TrainingSetup({
           calfR
         );
 
-        // The robot head is anchored to the fixed world-space headline.
+        // Keep the robot head centered on the fixed world-space headline.
         const robotRootY = HEADLINE_Y - head.position.y;
         if (drill === 'braking') {
           root.position.set(
@@ -1494,14 +1494,11 @@ function TrainingSetup({
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
           if (aimCoach) {
-            // 피드백은 타겟의 머리/히트박스를 전혀 사용하지 않고,
-            // 고정된 월드 헤드라인 자체만 기준으로 계산합니다.
+            // 피드백은 타겟의 머리/히트박스를 사용하지 않고 고정 헤드라인만 기준으로 합니다.
             const screenHeight = renderer.domElement.clientHeight;
             const cameraDirection = new THREE.Vector3();
             camera.getWorldDirection(cameraDirection);
 
-            // 현재 시선의 Z 위치에서 고정 헤드라인과 만나는 X를 구합니다.
-            // 따라서 좌우로 둘러봐도 같은 고정 헤드라인을 기준으로 합니다.
             let headlineX = 0;
             if (Math.abs(cameraDirection.z) > 0.0001) {
               const t = (HEADLINE_Z - camera.position.z) / cameraDirection.z;
@@ -1524,9 +1521,6 @@ function TrainingSetup({
             const pixelPadding = 4;
             const deltaY = crosshairY - headlineYpx;
 
-            // 화면 Y: 작을수록 위쪽입니다.
-            // 크로스헤어가 고정 헤드라인보다 위 = 에임이 너무 높음.
-            // 크로스헤어가 고정 헤드라인보다 아래 = 에임이 너무 낮음.
             const nextAimState: 'low' | 'high' | 'ok' =
               Math.abs(deltaY) <= pixelPadding
                 ? 'ok'
@@ -1570,7 +1564,6 @@ function TrainingSetup({
 
             root.position.x += tracking.velocity * delta;
             root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
-            // Keep the robot head locked to the fixed headline while strafing.
             root.position.y = HEADLINE_Y - 1.65;
             root.position.z = -5.75;
             root.rotation.y = 0;
@@ -1909,3 +1902,496 @@ function TrainingSetup({
       onChange({
         ...settings,
         sensitivity: Math.max(
+          0.4,
+          Math.min(2.4, candidate / 0.35),
+        ),
+      });
+    };
+
+    return (
+      <main className="tool-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>
+            AIM LAB
+          </button>
+
+          <div>
+            <p className="eyebrow">
+              SENSITIVITY LAB // CALIBRATION
+            </p>
+            <h1>감도 찾기</h1>
+          </div>
+
+          <div className="game-help">
+            eDPI {Math.round(edpi)}
+          </div>
+        </header>
+
+        <section className="tool-hero panel">
+          <div>
+            <p className="eyebrow">MOUSE CALIBRATION</p>
+
+            <h2>나에게 맞는 감도를 찾습니다.</h2>
+
+            <p>
+              현재 DPI와 감도를 입력하고 후보 감도를 비교한 뒤
+              3D 훈련에 적용하세요.
+            </p>
+          </div>
+
+          <div className="tool-hero-stats">
+            <span>
+              <small>eDPI</small>
+              <b>{Math.round(edpi)}</b>
+            </span>
+
+            <span>
+              <small>CM / 360</small>
+              <b>{cm360.toFixed(1)}</b>
+            </span>
+          </div>
+        </section>
+
+        <section className="tool-grid sensitivity-grid">
+          <article className="tool-card static">
+            <b>DPI</b>
+
+            <input
+              className="large-input"
+              type="number"
+              value={dpi}
+              onChange={(event) =>
+                setDpi(Number(event.target.value) || 800)
+              }
+            />
+
+            <span>마우스 DPI</span>
+          </article>
+
+          <article className="tool-card static">
+            <b>VALORANT SENS</b>
+
+            <input
+              className="large-input"
+              type="number"
+              min="0.05"
+              max="2"
+              step="0.01"
+              value={sens}
+              onChange={(event) =>
+                setSens(Number(event.target.value) || 0.35)
+              }
+            />
+
+            <span>게임 내 감도</span>
+          </article>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">CANDIDATES</p>
+              <h2>후보 감도 비교</h2>
+            </div>
+          </div>
+
+          <div className="candidate-grid">
+            {candidates.map((value) => (
+              <button
+                key={value}
+                className={`candidate-card ${candidate === value ? 'selected' : ''
+                  }`}
+                onClick={() => start(value)}
+              >
+                <small>
+                  {value === sens ? 'CURRENT' : 'CANDIDATE'}
+                </small>
+
+                <strong>{value.toFixed(3)}</strong>
+
+                <span>
+                  eDPI {Math.round(dpi * value)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">
+                MICRO TEST // 10 TARGETS
+              </p>
+
+              <h2>
+                {running
+                  ? `테스트 진행 ${total}/10`
+                  : total >= 10
+                    ? '테스트 완료'
+                    : '후보를 선택하세요'}
+              </h2>
+            </div>
+          </div>
+
+          <div className="sensitivity-test panel">
+            {running && (
+              <button
+                className="sensitivity-target"
+                style={{
+                  left: `${target.x}%`,
+                  top: `${target.y}%`,
+                }}
+                onClick={hit}
+                aria-label="감도 테스트 타겟"
+              />
+            )}
+
+            {!running && (
+              <div className="sensitivity-test-empty">
+                {total >= 10
+                  ? `선택 감도 ${candidate?.toFixed(3)} · 명중 ${hits}/${total}`
+                  : '후보 감도를 하나 선택하면 10회 타겟 테스트가 시작됩니다.'}
+              </div>
+            )}
+          </div>
+
+          {candidate !== null && !running && total >= 10 && (
+            <div className="setup-row">
+              <div>
+                <span className="field-label">
+                  테스트 정확도
+                </span>
+
+                <strong>
+                  {Math.round((hits / total) * 100)}%
+                </strong>
+              </div>
+
+              <button
+                className="start-button"
+                onClick={applyCandidate}
+              >
+                이 감도를 3D에 적용
+              </button>
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+  function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
+    const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
+    const reaction = stats.avgReaction ?? 0;
+    const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 250) / 8)) : stats.accuracy;
+    const sessionScore = Math.max(0, Math.min(100, Math.round(stats.accuracy * .72 + reactionScore * .28)));
+    const grade = sessionScore >= 90 ? 'A' : sessionScore >= 80 ? 'B+' : sessionScore >= 70 ? 'B' : sessionScore >= 60 ? 'C' : 'D';
+    const aimGrade = stats.accuracy >= 90 ? 'GOOD' : stats.accuracy >= 75 ? 'FAIR' : 'POOR';
+    const reactionGrade = !reaction ? '--' : reaction <= 450 ? 'GOOD' : 'POOR';
+    const weakest = (stats.overshoots ?? 0) >= Math.max(2, Math.ceil(stats.shots * .12)) ? 'CHAOS' : 'PRECISION';
+    const strongest = stats.accuracy >= 90 ? 'LONG' : 'CLEAN';
+    const coaching = weakest === 'CHAOS'
+      ? `CHAOS 패턴에서 ${stats.hits}/${stats.shots} 적중. 다음 세션은 이 패턴의 첫 이동을 더 작고 빠르게 가져가.`
+      : `명중률 ${stats.accuracy.toFixed(1)}%. 다음 세션은 첫 조준을 더 안정적으로 가져가.`;
+    return (
+      <div className="aim-app results-screen">
+        <div className="results-shell modern-results">
+          <div className="results-top"><Brand /><div className="results-kicker">FLICK RESULT</div></div>
+          <div className="result-identity">
+            <div>
+              <p className="eyebrow">SANGHYEON AIM LAB // {protocol} RESULT</p>
+              <h1>{protocol} RESULT</h1>
+              <span className="result-difficulty">HEADLINE · NEWBIE</span>
+            </div>
+            <div className="result-score-hero"><strong>{sessionScore}</strong><span>/ 100</span><b>SESSION SCORE</b><em>{grade}</em></div>
+          </div>
+          <section className="result-primary-metrics">
+            <div><span>ACCURACY</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
+            <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>MAX COMBO</span><strong>{stats.maxStreak ?? stats.streak}</strong></div>
+          </section>
+          <section className="result-core">
+            <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
+            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
+            <div className="result-pattern-grid">
+              <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
+              <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
+              <div><b>{reactionGrade}</b><span>REACTION</span></div>
+              <div><b>{aimGrade}</b><span>AIM ACCURACY</span></div>
+            </div>
+          </section>
+          <section className="coaching-card">
+            <span>COACHING</span>
+            <p>{coaching}</p>
+          </section>
+          <div className="result-actions">
+            <button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button>
+            <button className="secondary-button" onClick={onHome}>훈련 선택으로</button>
+          </div>
+          <footer className="results-footer"><span>LAB</span><span>기록은 브라우저에 자동 저장됩니다</span></footer>
+        </div>
+      </div>
+    );
+  }
+  function GrowthPage({
+    history,
+    onBack,
+  }: {
+    history: HistoryItem[];
+    onBack: () => void;
+  }) {
+    const best = history.length
+      ? Math.max(...history.map((item) => item.score))
+      : 0;
+
+    const avg = history.length
+      ? Math.round(
+        history
+          .slice(0, 7)
+          .reduce((sum, item) => sum + item.score, 0) /
+        Math.min(7, history.length),
+      )
+      : 0;
+
+    const modules: Drill[] = [
+      'flick',
+      'tracking',
+      'braking',
+    ];
+
+    const moduleName = (type: Drill) => {
+      if (type === 'flick') return 'FLICK';
+      if (type === 'tracking') return 'TRACKING';
+      return 'BRAKING';
+    };
+
+    return (
+      <main className="tool-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>
+            AIM LAB
+          </button>
+
+          <div>
+            <p className="eyebrow">
+              PROGRESS DATABASE // DETAILED
+            </p>
+
+            <h1>성장 기록</h1>
+          </div>
+
+          <div className="game-help">
+            {history.length} SESSIONS
+          </div>
+        </header>
+
+        <section className="growth-overview panel">
+          <div>
+            <p className="eyebrow">
+              WHAT AM I IMPROVING?
+            </p>
+
+            <h2>점수 하나만 보지 않습니다.</h2>
+
+            <p>
+              모드별 최고 기록과 최근 기록을 비교해서
+              훈련 흐름과 성장 추이를 확인합니다.
+            </p>
+          </div>
+
+          <div className="growth-overview-stats">
+            <span>
+              <small>SESSIONS</small>
+              <b>{history.length}</b>
+            </span>
+
+            <span>
+              <small>BEST</small>
+              <b>{best || '--'}</b>
+            </span>
+
+            <span>
+              <small>LAST 7 AVG</small>
+              <b>{avg || '--'}</b>
+            </span>
+          </div>
+        </section>
+
+        <section className="growth-cards">
+          {modules.map((type) => {
+            const rows = history.filter(
+              (item) => item.drill === type,
+            );
+
+            const bestType = rows.length
+              ? Math.max(...rows.map((item) => item.score))
+              : 0;
+
+            const last = rows[0];
+
+            return (
+              <article
+                className={`growth-module panel ${type}`}
+                key={type}
+              >
+                <div className="growth-module-head">
+                  <span>{moduleName(type)}</span>
+                  <b>{rows.length}회</b>
+                </div>
+
+                <div className="growth-main">
+                  <strong>{bestType || '--'}</strong>
+                  <small>BEST SCORE</small>
+                </div>
+
+                <div className="growth-detail-grid">
+                  <div>
+                    <small>최근 점수</small>
+                    <b>{last?.score ?? '--'}</b>
+                  </div>
+
+                  <div>
+                    <small>최근 명중률</small>
+                    <b>
+                      {last
+                        ? `${last.accuracy.toFixed(1)}%`
+                        : '--'}
+                    </b>
+                  </div>
+
+                  <div>
+                    <small>최근 연속</small>
+                    <b>{last?.streak ?? '--'}</b>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="growth-timeline panel">
+          {history.length ? (
+            history.map((record, index) => (
+              <div
+                className="growth-row"
+                key={`${record.date}-${record.score}-${index}`}
+              >
+                <time>{record.date}</time>
+
+                <b>{record.drill.toUpperCase()}</b>
+
+                <strong>{record.score}</strong>
+
+                <span>
+                  {record.accuracy.toFixed(1)}% ACC ·{' '}
+                  {record.hits ?? 0}/{record.shots ?? 0} HITS
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="empty">
+              아직 완료한 훈련 기록이 없습니다.
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+    return (
+      <main className="tool-page crosshair-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>AIM LAB</button>
+          <div>
+            <p className="eyebrow">SETTINGS // GLOBAL</p>
+            <h1>설정</h1>
+          </div>
+          <div className="game-help">3D RANGE</div>
+        </header>
+        <section className="crosshair-config-shell panel">
+          <div className="crosshair-big-preview"><CrosshairView config={settings.crosshair} /></div>
+          <div className="crosshair-config-body">
+            <div className="preset-row">
+              {Object.entries(CROSSHAIR_PRESETS).map(([name, preset]) => (
+                <button key={name} className={`preset ${settings.crosshair.style === preset.style && settings.crosshair.size === preset.size ? 'selected' : ''}`} onClick={() => onChange({ ...settings, crosshair: { ...preset } })}>{name}</button>
+              ))}
+            </div>
+            <div className="crosshair-config-grid">
+              <label>색상<input type="color" value={settings.crosshair.color} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, color: e.target.value } })} /></label>
+              <label>크기<input type="range" min="18" max="60" value={settings.crosshair.size} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(e.target.value) } })} /></label>
+              <label>간격<input type="range" min="0" max="14" value={settings.crosshair.gap} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, gap: Number(e.target.value) } })} /></label>
+              <label>두께<input type="range" min="1" max="5" value={settings.crosshair.thickness} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, thickness: Number(e.target.value) } })} /></label>
+            </div>
+            <div className="crosshair-toggles">
+              <label><input type="checkbox" checked={settings.crosshair.outline} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, outline: e.target.checked } })} /> 외곽선</label>
+              <label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, centerDot: e.target.checked } })} /> 중앙 점</label>
+            </div>
+            <div className="settings-subsection">
+              <p className="eyebrow">CROSSHAIR</p>
+              <strong>조준선 설정</strong>
+            </div>
+            <div className="settings-subsection telemetry-settings">
+              <p className="eyebrow">RANGE TELEMETRY</p>
+              <strong>현재 프레임 / 발사 오차 표시</strong>
+              <div className="telemetry-mode-grid">
+                {([
+                  ['off', '표시안함'],
+                  ['text', '텍스트표시'],
+                  ['graph', '그래프보기'],
+                  ['both', '둘다보기'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} className={settings.telemetryMode === value ? 'selected' : ''} onClick={() => onChange({ ...settings, telemetryMode: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  function HomeRoute() {
+    const [view, setView] = useState<View>('home');
+    const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
+    const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
+    const [results, setResults] = useState<RunStats | null>(null);
+    useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
+    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
+    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
+    if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
+    if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
+    if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
+    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
+  }
+
+function Router() {
+  return (
+    <ErrorBoundary>
+      <Switch>
+        <Route path="/" component={HomeRoute} />
+        <Route component={NotFound} />
+      </Switch>
+    </ErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <Router />
+        </WouterRouter>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;
