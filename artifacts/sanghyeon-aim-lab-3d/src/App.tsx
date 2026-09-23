@@ -791,7 +791,7 @@ function TrainingSetup({
               <span className="option-on">{feedbackEnabled ? 'ON' : 'OFF'}</span>
             </button>
             <button type="button" className={`mode-option ${aimCoach ? 'selected' : ''}`} onClick={() => setAimCoach((value) => !value)}>
-              <div><strong>📐 에임 높이 교정</strong><span>헤드라인 높이를 기준으로 조준선을 교정합니다.</span></div>
+              <div><strong>📐 실시간 에임 코치</strong><span>현재 타겟 대비 조준 위치를 실시간으로 알려줍니다.</span></div>
               <span className="option-on">{aimCoach ? 'ON' : 'OFF'}</span>
             </button>
           </div>
@@ -871,12 +871,18 @@ function TrainingSetup({
     const [fps, setFps] = useState(0);
     const [shotError, setShotError] = useState<number | null>(null);
     const [shotErrorHistory, setShotErrorHistory] = useState<number[]>([]);
+    const [aimCoachState, setAimCoachState] = useState<{ message: string; tone: string }>({ message: '● CENTERED', tone: 'center' });
     const reactionSamplesRef = useRef<number[]>([]);
     const targetSpawnAtRef = useRef(performance.now());
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
     const targetRootRef = useRef<THREE.Group | null>(null);
     const aimCoachGuideRef = useRef<THREE.Line | null>(null);
     const brakingMovedRef = useRef(false);
+    const jumpVelocityRef = useRef(0);
+    const groundedRef = useRef(true);
+    const crouchRef = useRef(false);
+    const walkRef = useRef(false);
+    const aimCoachStampRef = useRef(0);
     const sensitivityRef = useRef(settings.sensitivity);
     const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'hell' ? 0.25 : difficulty === 'elite' ? 0.31 : 0.42;
     const finish = useCallback(() => {
@@ -917,14 +923,41 @@ function TrainingSetup({
         new THREE.Vector3(-HEADLINE_HALF_WIDTH, HEADLINE_Y, HEADLINE_Z),
         new THREE.Vector3(HEADLINE_HALF_WIDTH, HEADLINE_Y, HEADLINE_Z),
       ]);
-      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: .58, depthTest: false });
+      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: .32, depthTest: false });
       const aimGuide = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
       aimGuide.visible = aimCoach;
       aimGuide.renderOrder = 20;
       scene.add(aimGuide);
       aimCoachGuideRef.current = aimGuide;
       const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
-      const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
+      const rightWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); rightWall.position.set(13, 3.5, -1); scene.add(rightWall);
+      const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#0b151a', roughness: 1, metalness: .05 })); ceiling.rotation.x = Math.PI / 2; ceiling.position.y = 7; scene.add(ceiling);
+      const facilityAccent = new THREE.MeshStandardMaterial({ color: '#182a30', roughness: .55, metalness: .55 });
+      const accent = new THREE.MeshStandardMaterial({ color: '#8fff35', emissive: '#315c16', emissiveIntensity: .75, roughness: .3 });
+      [-8, -4, 0, 4, 8].forEach((x) => {
+        const pillar = new THREE.Mesh(new THREE.BoxGeometry(.22, 6.8, .22), facilityAccent);
+        pillar.position.set(x, 3.4, -10.25);
+        scene.add(pillar);
+        const strip = new THREE.Mesh(new THREE.BoxGeometry(.08, 4.8, .03), accent);
+        strip.position.set(x, 3.35, -10.08);
+        scene.add(strip);
+      });
+      [0, 5, 10, 15, 20].forEach((distance) => {
+        const z = Math.max(-9.8, 4.8 - distance);
+        const line = new THREE.Mesh(new THREE.BoxGeometry(21, .025, .035), accent);
+        line.position.set(0, .025, z);
+        scene.add(line);
+      });
+      const rangeLights = [-10, -6, -2, 2, 6, 10].map((x) => {
+        const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.5, .04, .06), new THREE.MeshBasicMaterial({ color: '#a3ff27' }));
+        lamp.position.set(x, 6.6, -6.7);
+        scene.add(lamp);
+        const light = new THREE.PointLight('#9cff4d', 2.2, 8, 2);
+        light.position.set(x, 6.1, -6.5);
+        scene.add(light);
+        return lamp;
+      });
+      void rangeLights;
       const group = new THREE.Group(); scene.add(group);
 
       // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
@@ -1230,7 +1263,10 @@ function TrainingSetup({
       };
       const onKeyDown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd'].includes(key)) { keys.add(key); event.preventDefault(); }
+        if (['w', 'a', 's', 'd', 'shift', 'control', ' '].includes(key)) {
+          keys.add(key);
+          event.preventDefault();
+        }
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); };
       const onBlur = () => keys.clear();
@@ -1239,38 +1275,53 @@ function TrainingSetup({
         setPointerLocked(locked);
       };
       const onCanvasClick = (event: MouseEvent) => onShoot(event);
-      const moveSpeed = 4.5;
+      const runSpeed = 5.4;
+      const walkSpeed = 2.6;
+      const crouchSpeed = 2.1;
+      const standingEyeHeight = 1.62;
+      const crouchingEyeHeight = 1.08;
+      const gravity = 19.0;
+      const jumpSpeed = 5.0;
       const applyMovement = (delta: number) => {
         const horizontal = Number(keys.has('d')) - Number(keys.has('a'));
         const forwardInput = Number(keys.has('w')) - Number(keys.has('s'));
         const input = new THREE.Vector3(horizontal, 0, forwardInput);
         if (input.lengthSq() > 1) input.normalize();
+        walkRef.current = keys.has('shift');
+        crouchRef.current = keys.has('control');
+
+        if (keys.has(' ') && groundedRef.current && !crouchRef.current) {
+          jumpVelocityRef.current = jumpSpeed;
+          groundedRef.current = false;
+        }
+
+        const currentSpeed = crouchRef.current ? crouchSpeed : walkRef.current ? walkSpeed : runSpeed;
         const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
         const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
-        const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * (drill === 'braking' ? 3.8 : moveSpeed)));
+        const desired = forward.multiplyScalar(input.z * currentSpeed).add(right.multiplyScalar(input.x * currentSpeed));
+
         if (drill === 'braking' && input.lengthSq() > 0) brakingMovedRef.current = true;
-        const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? (drill === 'braking' ? 18 : 32) : (drill === 'braking' ? 52 : 42)) * Math.min(delta, .05));
+        const accel = input.lengthSq() > 0 ? 28 : 22;
+        const blend = 1 - Math.exp(-accel * Math.min(delta, .05));
         velocity.lerp(desired, blend);
         camera.position.addScaledVector(velocity, delta);
+
+        if (!groundedRef.current) {
+          jumpVelocityRef.current -= gravity * delta;
+          camera.position.y += jumpVelocityRef.current * delta;
+          if (camera.position.y <= standingEyeHeight) {
+            camera.position.y = standingEyeHeight;
+            jumpVelocityRef.current = 0;
+            groundedRef.current = true;
+          }
+        } else {
+          const targetEye = crouchRef.current ? crouchingEyeHeight : standingEyeHeight;
+          camera.position.y += (targetEye - camera.position.y) * (1 - Math.exp(-18 * Math.min(delta, .05)));
+        }
+
         camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
-        camera.position.y = 1.6;
       };
-      renderer.domElement.addEventListener('pointermove', onPointerMove); renderer.domElement.addEventListener('click', onCanvasClick); document.addEventListener('pointerlockchange', onPointerLockChange); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('blur', onBlur);
-      const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
-      window.addEventListener('resize', resize);
-      const trackingState = {
-        direction: Math.random() < .5 ? -1 : 1,
-        velocity: 0,
-        timer: .35 + Math.random() * .45,
-      };
-      if (drill === 'flick') {
-        for (let index = 0; index < flickBotCount; index += 1) spawn();
-      } else {
-        spawn();
-      }
-      let frame = 0; let previous = performance.now();
-      let fpsFrames = 0; let fpsStarted = performance.now();
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
         const delta = Math.min((now - previous) / 1000, .05);
@@ -1319,6 +1370,13 @@ function TrainingSetup({
           } else {
             aimGuide.visible = false;
           }
+          if (drill !== 'flick' && targetRootRef.current) {
+            const root = targetRootRef.current;
+            const dx = camera.position.x - root.position.x;
+            const dz = camera.position.z - root.position.z;
+            root.rotation.y = Math.atan2(dx, dz);
+          }
+
           if (drill === 'tracking' && targetRootRef.current) {
             // Valorant-style strafing: the bot stays grounded and moves in
             // unpredictable left/right bursts instead of floating in an orbit.
@@ -1354,6 +1412,31 @@ function TrainingSetup({
             tracking.timer -= delta;
           }
         }
+        if (aimCoach && performance.now() - aimCoachStampRef.current > 120) {
+          aimCoachStampRef.current = performance.now();
+          let bestHead: THREE.Object3D | null = null;
+          let bestDistance = Infinity;
+          group.traverse((object) => {
+            if (object.name !== 'head' && object.name !== 'target') return;
+            const projected = object.getWorldPosition(new THREE.Vector3()).project(camera);
+            const distance = Math.hypot(projected.x, projected.y);
+            if (projected.z > -1 && projected.z < 1 && distance < bestDistance) {
+              bestDistance = distance;
+              bestHead = object;
+            }
+          });
+          if (bestHead) {
+            const projected = bestHead.getWorldPosition(new THREE.Vector3()).project(camera);
+            if (Math.abs(projected.x) > .075) {
+              setAimCoachState({ message: projected.x > 0 ? '→ TARGET RIGHT' : '← TARGET LEFT', tone: 'horizontal' });
+            } else if (Math.abs(projected.y) > .075) {
+              setAimCoachState({ message: projected.y > 0 ? '↑ TOO HIGH' : '↓ TOO LOW', tone: 'vertical' });
+            } else {
+              setAimCoachState({ message: '● CENTERED', tone: 'center' });
+            }
+          }
+        }
+
         renderer.render(scene, camera);
       };
       frame = requestAnimationFrame(animate);
@@ -1480,6 +1563,13 @@ function TrainingSetup({
             className="crosshair-live"
           />
 
+          {aimCoach && (
+            <div className={`aim-coach-live ${aimCoachState.tone}`}>
+              <span>AIM COACH</span>
+              <strong>{aimCoachState.message}</strong>
+            </div>
+          )}
+
           {drill === 'braking' && (
             <div className="braking-guide">
               <b>브레이킹 · 카운터 스트레이프</b>
@@ -1541,6 +1631,12 @@ function TrainingSetup({
               <kbd>A</kbd>
               <kbd>S</kbd>
               <kbd>D</kbd>
+              <kbd>SHIFT</kbd>
+              <span>걷기</span>
+              <kbd>CTRL</kbd>
+              <span>앉기</span>
+              <kbd>SPACE</kbd>
+              <span>점프</span>
               <span>마우스 시점 / 클릭 사격</span>
             </div>
 
@@ -1627,7 +1723,7 @@ function TrainingSetup({
   }) {
     const [dpi, setDpi] = useState(800);
     const [sens, setSens] = useState(
-      Number((settings.sensitivity * 0.35).toFixed(3)),
+      Number(settings.sensitivity.toFixed(3)),
     );
     const [candidate, setCandidate] = useState<number | null>(null);
     const [hits, setHits] = useState(0);
@@ -1676,10 +1772,7 @@ function TrainingSetup({
 
       onChange({
         ...settings,
-        sensitivity: Math.max(
-          0.4,
-          Math.min(2.4, candidate / 0.35),
-        ),
+        sensitivity: Math.max(0.05, Math.min(2.0, candidate)),
       });
     };
 
