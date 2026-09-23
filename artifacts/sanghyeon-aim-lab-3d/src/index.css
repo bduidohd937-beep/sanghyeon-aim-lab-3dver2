@@ -1646,3 +1646,62 @@ body {
     grid-template-columns:1fr;
   }
 }
+
+
+/* SANGHYEON AIM COACH / FPS HUD */
+.aim-coach-live{
+  position:absolute;
+  left:50%;
+  top:calc(50% + 78px);
+  transform:translateX(-50%);
+  min-width:180px;
+  padding:9px 14px;
+  border:1px solid rgba(120,255,90,.28);
+  border-radius:7px;
+  background:rgba(5,10,12,.78);
+  backdrop-filter:blur(8px);
+  text-align:center;
+  pointer-events:none;
+  z-index:20;
+  box-shadow:0 8px 30px rgba(0,0,0,.2);
+}
+.aim-coach-live span{
+  display:block;
+  margin-bottom:3px;
+  color:#7d8b93;
+  font:700 9px var(--app-font-mono);
+  letter-spacing:.16em;
+}
+.aim-coach-live strong{
+  display:block;
+  color:#dcefe1;
+  font:800 12px var(--app-font-mono);
+  letter-spacing:.08em;
+}
+.aim-coach-live.vertical{
+  border-color:rgba(255,190,90,.42);
+}
+.aim-coach-live.vertical strong{
+  color:#ffd28a;
+}
+.aim-coach-live.horizontal{
+  border-color:rgba(80,190,255,.42);
+}
+.aim-coach-live.horizontal strong{
+  color:#8fd8ff;
+}
+.aim-coach-live.center{
+  border-color:rgba(98,213,160,.32);
+}
+.aim-coach-live.center strong{
+  color:#8de4ba;
+}
+.range-canvas-wrap canvas{
+  cursor:crosshair;
+}
+@media(max-width:700px){
+  .aim-coach-live{
+    top:calc(50% + 64px);
+    min-width:150px;
+  }
+}
