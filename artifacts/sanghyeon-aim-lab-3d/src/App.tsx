@@ -22,7 +22,8 @@ type View =
   | 'range'
   | 'results'
   | 'sensitivity'
-  | 'growth';
+  | 'growth'
+  | 'crosshair';
 type RunStatus = 'active' | 'paused' | 'done';
 type  CrosshairConfig = {
   style:
@@ -469,27 +470,12 @@ function Home({
   };
 
   const drillInfo = {
-    flick: {
-      icon: <Crosshair size={30} />,
-      tag: '01',
-      title: 'FLICK',
-      korean: '순간 조준',
-      desc: '출현하는 타겟을 빠르게 포착하고 정확하게 클릭합니다.',
-    },
-    tracking: {
-      icon: <Target size={30} />,
-      tag: '02',
-      title: 'TRACKING',
-      korean: '추적 조준',
-      desc: '움직이는 타겟을 따라가며 안정적인 조준을 훈련합니다.',
-    },
-    braking: {
-      icon: <Gauge size={30} />,
-      tag: '03',
-      title: 'BRAKING',
-      korean: '감속 조준',
-      desc: '이동을 멈추는 순간 정확하게 첫 발을 맞춥니다.',
-    },
+    flick: { icon: <Crosshair size={30} />, tag: '01', title: 'FLICK', korean: '순간 조준', desc: '출현하는 타겟을 빠르게 포착하고 정확하게 클릭합니다.', active: true },
+    reaction: { icon: <Target size={30} />, tag: '02', title: 'REACTION', korean: '시각 반응', desc: '나타나는 순간을 보고 빠르게 반응합니다.', active: false },
+    tracking: { icon: <Target size={30} />, tag: '03', title: 'TRACKING', korean: '추적 조준', desc: '움직이는 타겟을 따라가며 안정적인 조준을 훈련합니다.', active: true },
+    braking: { icon: <Gauge size={30} />, tag: '04', title: 'BRAKING', korean: '감속 조준', desc: '이동을 멈추는 순간 정확하게 첫 발을 맞춥니다.', active: true },
+    switching: { icon: <Target size={30} />, tag: '05', title: 'SWITCHING', korean: '타겟 전환', desc: '여러 타겟 사이를 빠르고 정확하게 전환합니다.', active: false },
+    micro: { icon: <Crosshair size={30} />, tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 거리의 정밀한 조준 보정을 훈련합니다.', active: false },
   };
 
   return (
@@ -498,20 +484,9 @@ function Home({
         <Brand />
 
         <nav className="main-nav">
-          <button
-            className="active"
-            onClick={() => onNavigate('home')}
-          >
-            LAB
-          </button>
-
-          <button onClick={() => onNavigate('sensitivity')}>
-            감도 찾기
-          </button>
-
-          <button onClick={() => onNavigate('growth')}>
-            성장 기록
-          </button>
+          <button onClick={() => onNavigate('sensitivity')}>🎯 감도 설정</button>
+          <button onClick={() => onNavigate('growth')}>📈 성장 기록</button>
+          <button onClick={() => onNavigate('crosshair')}>✚ 조준선 설정</button>
         </nav>
 
         <div className="header-meta">
@@ -527,13 +502,7 @@ function Home({
             LV.{Math.max(1, Math.floor(history.length / 5) + 1)}
           </strong>
 
-          <button
-            className="hud-button"
-            onClick={onSettings}
-            aria-label="설정"
-          >
-            <Settings2 size={16} />
-          </button>
+          <span className="header-ready">READY</span>
         </div>
       </header>
 
@@ -565,7 +534,7 @@ function Home({
                 <h2>훈련 선택</h2>
               </div>
 
-              <span className="phase">03 MODES</span>
+              <span className="phase">06 MODES</span>
             </div>
 
             <div className="drill-grid">
@@ -576,8 +545,8 @@ function Home({
                 return (
                   <button
                     key={type}
-                    className={`drill-card ${selected ? 'selected' : ''}`}
-                  onClick={() => onSelectDrill(type)}
+                    className={`drill-card ${selected ? 'selected' : ''} ${item.active ? '' : 'disabled'}`}
+                  onClick={() => item.active && onSelectDrill(type)}
                   >
                     <div className="drill-card-top">
                       <span className="drill-number">
@@ -601,7 +570,7 @@ function Home({
 
                     <div className="drill-card-bottom">
                       <span>
-                        {selected ? 'SELECTED' : 'SELECT'}
+                        {selected ? 'SELECTED' : item.active ? 'SELECT' : 'PREPARING'}
                       </span>
 
                       <span>→</span>
@@ -609,181 +578,6 @@ function Home({
                   </button>
                 );
               })}
-            </div>
-          </section>
-
-      
-
-          <section className="restored-section">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">PERSONAL TOOLS</p>
-                <h2>개인 도구</h2>
-              </div>
-            </div>
-
-            <div className="tool-grid">
-              <button
-                className="tool-card"
-                onClick={() => onNavigate('sensitivity')}
-              >
-                <b>🎯 정밀 감도 찾기</b>
-
-                <span>
-                  DPI · 게임 감도 · eDPI · cm/360
-                </span>
-
-                <i>OPEN →</i>
-              </button>
-
-              <button
-                className="tool-card"
-                onClick={() => onNavigate('growth')}
-              >
-                <b>📈 에임 성장 기록</b>
-
-                <span>
-                  최근 기록 · 최고 점수 · 성장 추적
-                </span>
-
-                <i>OPEN →</i>
-              </button>
-            </div>
-          </section>
-
-          <section className="restored-section">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">CROSSHAIR</p>
-                <h2>조준선</h2>
-              </div>
-
-              <span className="phase">GLOBAL</span>
-            </div>
-
-            <div className="crosshair-panel panel">
-              <div className="crosshair-preview">
-                <CrosshairView config={settings.crosshair} />
-              </div>
-
-              <div className="crosshair-controls">
-                <div className="preset-row">
-                  {Object.entries(CROSSHAIR_PRESETS).map(
-                    ([name, config]) => (
-                      <button
-                        key={name}
-                        className={`preset ${
-                          settings.crosshair.style ===
-                            config.style &&
-                          settings.crosshair.size ===
-                            config.size
-                            ? 'selected'
-                            : ''
-                        }`}
-                        onClick={() =>
-                          updateCrosshair(config)
-                        }
-                      >
-                        {name}
-                      </button>
-                    ),
-                  )}
-                </div>
-
-                <div className="control-row">
-                  <label>
-                    색상
-                    <input
-                      type="color"
-                      value={settings.crosshair.color}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          color: e.target.value,
-                        })
-                      }
-                    />
-                  </label>
-
-                  <label>
-                    크기
-                    <input
-                      type="range"
-                      min="12"
-                      max="64"
-                      value={settings.crosshair.size}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          size: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-
-                  <label>
-                    간격
-                    <input
-                      type="range"
-                      min="0"
-                      max="12"
-                      value={settings.crosshair.gap}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          gap: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-
-                  <label>
-                    두께
-                    <input
-                      type="range"
-                      min="1"
-                      max="5"
-                      value={settings.crosshair.thickness}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          thickness: Number(e.target.value),
-                        })
-                      }
-                    />
-                  </label>
-                </div>
-
-                <div className="toggle-row">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.crosshair.outline}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          outline: e.target.checked,
-                        })
-                      }
-                    />
-                    외곽선
-                  </label>
-
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={settings.crosshair.centerDot}
-                      onChange={(e) =>
-                        updateCrosshair({
-                          ...settings.crosshair,
-                          centerDot: e.target.checked,
-                        })
-                      }
-                    />
-                    중앙점
-                  </label>
-                </div>
-              </div>
             </div>
           </section>
         </main>
@@ -1195,15 +989,6 @@ function TrainingSetup({
       const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
       const group = new THREE.Group(); scene.add(group);
 
-      const aimGuideGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-6.5, 1.72, -6.82),
-        new THREE.Vector3(6.5, 1.72, -6.82),
-      ]);
-      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: 0.32 });
-      const aimGuideLine = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
-      aimGuideLine.visible = aimCoach;
-      scene.add(aimGuideLine);
-
       // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
       const weapon = new THREE.Group();
       weapon.position.set(.34, -.27, -.72);
@@ -1272,9 +1057,7 @@ function TrainingSetup({
       };
 
       const brakingStopThreshold = .16;
-      const brakingTargetY = 2.25;
-      let aimCoachLow = false;
-      const brakingTargetZ = -4.2;
+      let aimCoachState: 'low' | 'high' | 'ok' = 'ok';
       const spawn = () => {
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
@@ -1479,7 +1262,7 @@ function TrainingSetup({
           next.score = Math.max(0, next.score - 20);
 
           if (feedbackEnabled) setFeedback({
-            text: '이동 중 발사 -20',
+            text: '쏘기 전에 움직이세요 -20',
             miss: true,
             id: Date.now(),
           });
@@ -1523,7 +1306,7 @@ function TrainingSetup({
 
           if (feedbackEnabled) setFeedback({
             text: brakingMoving
-              ? '이동 중 발사 -20'
+              ? '쏘기 전에 움직이세요 -20'
               : bodyHit
                 ? '몸통 명중 · 헤드라인 연습 실패 -20'
                 : '빗나감 -20',
@@ -1536,6 +1319,7 @@ function TrainingSetup({
           ? (next.hits / next.shots) * 100
           : 0;
 
+        if (drill === 'braking') brakingMovedRef.current = false;
         statsRef.current = next;
         setStats({ ...next });
       };
@@ -1550,13 +1334,13 @@ function TrainingSetup({
       const moveSpeed = 4.5;
       const applyMovement = (delta: number) => {
         const horizontal = Number(keys.has('d')) - Number(keys.has('a'));
-        const forwardInput = drill === 'braking' ? 0 : Number(keys.has('w')) - Number(keys.has('s'));
+        const forwardInput = Number(keys.has('w')) - Number(keys.has('s'));
         const input = new THREE.Vector3(horizontal, 0, forwardInput);
         if (input.lengthSq() > 1) input.normalize();
         const forward = new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
         const right = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
         const desired = forward.multiplyScalar(input.z * moveSpeed).add(right.multiplyScalar(input.x * (drill === 'braking' ? 3.8 : moveSpeed)));
-        if (drill === 'braking' && horizontal !== 0) brakingMovedRef.current = true;
+        if (drill === 'braking' && input.lengthSq() > 0) brakingMovedRef.current = true;
         const blend = 1 - Math.exp(-(input.lengthSq() > 0 ? (drill === 'braking' ? 18 : 32) : (drill === 'braking' ? 52 : 42)) * Math.min(delta, .05));
         velocity.lerp(desired, blend);
         camera.position.addScaledVector(velocity, delta);
@@ -1586,13 +1370,21 @@ function TrainingSetup({
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
           if (aimCoach) {
-            const low = pitch < -0.38;
-            if (low !== aimCoachLow) {
-              aimCoachLow = low;
-              setAimCoachWarning(low);
+            const lookDirection = new THREE.Vector3();
+            camera.getWorldDirection(lookDirection);
+            const referenceZ = camera.position.z - 5.5;
+            const distance = referenceZ - camera.position.z;
+            const projectedY = Math.abs(lookDirection.z) > 0.001
+              ? camera.position.y + lookDirection.y * (distance / -lookDirection.z)
+              : camera.position.y;
+            const nextAimState: 'low' | 'high' | 'ok' =
+              projectedY < 1.28 ? 'low' : projectedY > 1.78 ? 'high' : 'ok';
+            if (nextAimState !== aimCoachState) {
+              aimCoachState = nextAimState;
+              setAimCoachWarning(nextAimState !== 'ok');
             }
-          } else if (aimCoachLow) {
-            aimCoachLow = false;
+          } else if (aimCoachState !== 'ok') {
+            aimCoachState = 'ok';
             setAimCoachWarning(false);
           }
           if (drill === 'tracking' && targetRootRef.current) {
@@ -2106,118 +1898,35 @@ function TrainingSetup({
       </main>
     );
   }
-  function Results({
-    stats,
-    onAgain,
-    onHome,
-  }: {
-    stats: RunStats;
-    onAgain: () => void;
-    onHome: () => void;
-  }) {
-    const protocol =
-      stats.drill === 'flick'
-        ? '플릭 조준'
-        : stats.drill === 'tracking'
-          ? '트래킹 조준'
-          : '브레이킹';
-
+  function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
+    const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
+    const performance = Math.max(0, Math.min(100, Math.round(stats.accuracy)));
     return (
       <div className="aim-app results-screen">
-        <div className="results-shell">
-          <div className="results-top">
-            <Brand />
-
-            <div className="results-kicker">
-              훈련 결과 / 3D AIM LAB
-            </div>
+        <div className="results-shell classic-results">
+          <div className="results-top"><Brand /><div className="results-kicker">TRAINING COMPLETE / {protocol}</div></div>
+          <div className="classic-results-head">
+            <p className="eyebrow">SANGHYEON AIM LAB // RESULT</p>
+            <h1>{protocol}<span> RESULTS</span></h1>
+            <p>이번 훈련의 조준 성능을 백분율로 확인하세요.</p>
           </div>
-
-          <div className="results-kicker">
-            {protocol} 훈련 완료
-          </div>
-
-          <h1 className="results-title">
-            기록
-            <br />
-            <span>저장되었습니다.</span>
-          </h1>
-
-          <p className="results-sub">
-            결과를 확인하고 다음 훈련에서 더 정밀하게
-            조준해보세요.
-          </p>
-
-          <div className="results-grid">
-            <div className="result-score">
-              <label>최종 점수</label>
-
-              <strong>
-                {stats.score.toLocaleString()}
-              </strong>
-
-              <small>
-                {stats.hits}회 명중 / {stats.shots}회 사격
-              </small>
-            </div>
-
-            <div className="result-metrics">
-              <div className="result-metric">
-                <label>명중률</label>
-                <strong>
-                  {stats.accuracy.toFixed(1)}%
-                </strong>
-              </div>
-
-              <div className="result-metric">
-                <label>최고 연속 명중</label>
-                <strong>
-                  {stats.streak
-                    .toString()
-                    .padStart(2, '0')}
-                </strong>
-              </div>
-
-              <div className="result-metric">
-                <label>훈련 시간</label>
-                <strong>
-                  {stats.duration}초
-                </strong>
-              </div>
-
-              <div className="result-metric">
-                <label>프로토콜</label>
-                <strong>{protocol}</strong>
-              </div>
-            </div>
-          </div>
-
+          <section className="percentage-score-card">
+            <span>종합 점수</span>
+            <strong>{performance}<small>%</small></strong>
+            <div className="percentage-bar"><i style={{ width: `${performance}%` }} /></div>
+            <em>{stats.hits} HIT / {stats.shots} SHOT</em>
+          </section>
+          <section className="result-metric-grid">
+            <div><span>명중률</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
+            <div><span>최고 연속</span><strong>{stats.streak}</strong></div>
+            <div><span>점수</span><strong>{stats.score.toLocaleString()}</strong></div>
+            <div><span>훈련 시간</span><strong>{stats.duration}초</strong></div>
+          </section>
           <div className="result-actions">
-            <button
-              className="start-button"
-              onClick={onAgain}
-            >
-              <RotateCcw size={15} />
-              다시 훈련
-            </button>
-
-            <button
-              className="secondary-button"
-              onClick={onHome}
-            >
-              훈련 선택으로
-            </button>
+            <button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button>
+            <button className="secondary-button" onClick={onHome}>훈련 선택으로</button>
           </div>
-
-          <footer className="results-footer">
-            <span>
-              기록은 브라우저에 자동 저장됩니다
-            </span>
-
-            <span>
-              Sanghyeon / 3D Aim Lab
-            </span>
-          </footer>
+          <footer className="results-footer"><span>기록은 브라우저에 자동 저장됩니다</span><span>Sanghyeon / 3D Aim Lab</span></footer>
         </div>
       </div>
     );
@@ -2387,21 +2096,56 @@ function TrainingSetup({
     );
   }
 
+  function CrosshairPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+    return (
+      <main className="tool-page crosshair-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>AIM LAB</button>
+          <div>
+            <p className="eyebrow">CROSSHAIR CONFIG // GLOBAL</p>
+            <h1>조준선 설정</h1>
+          </div>
+          <div className="game-help">3D RANGE</div>
+        </header>
+        <section className="crosshair-config-shell panel">
+          <div className="crosshair-big-preview"><CrosshairView config={settings.crosshair} /></div>
+          <div className="crosshair-config-body">
+            <div className="preset-row">
+              {Object.entries(CROSSHAIR_PRESETS).map(([name, preset]) => (
+                <button key={name} className={`preset ${settings.crosshair.style === preset.style && settings.crosshair.size === preset.size ? 'selected' : ''}`} onClick={() => onChange({ ...settings, crosshair: { ...preset } })}>{name}</button>
+              ))}
+            </div>
+            <div className="crosshair-config-grid">
+              <label>색상<input type="color" value={settings.crosshair.color} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, color: e.target.value } })} /></label>
+              <label>크기<input type="range" min="18" max="60" value={settings.crosshair.size} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(e.target.value) } })} /></label>
+              <label>간격<input type="range" min="0" max="14" value={settings.crosshair.gap} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, gap: Number(e.target.value) } })} /></label>
+              <label>두께<input type="range" min="1" max="5" value={settings.crosshair.thickness} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, thickness: Number(e.target.value) } })} /></label>
+            </div>
+            <div className="crosshair-toggles">
+              <label><input type="checkbox" checked={settings.crosshair.outline} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, outline: e.target.checked } })} /> 외곽선</label>
+              <label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, centerDot: e.target.checked } })} /> 중앙 점</label>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
   function HomeRoute() {
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
     const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
     const [results, setResults] = useState<RunStats | null>(null);
-    const [settingsOpen, setSettingsOpen] = useState(false);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
-    if (view === 'home') return <><Home settings={settings} onSettings={() => setSettingsOpen(true)} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />{settingsOpen && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}</>;
+    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
     if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
+    if (view === 'crosshair') return <CrosshairPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
   }
 
