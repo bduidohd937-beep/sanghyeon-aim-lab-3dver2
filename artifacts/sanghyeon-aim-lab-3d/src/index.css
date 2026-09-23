@@ -1705,3 +1705,15 @@ body {
     min-width:150px;
   }
 }
+
+/* SANGHYEON SETTINGS */
+.settings-select{width:100%;height:38px;margin-top:10px;padding:0 10px;border:1px solid #2d3a44;border-radius:7px;background:#0b1116;color:#f3f6f8;font:12px var(--app-font-sans);}
+.settings-note{margin:8px 0 0;color:#687783;font:10px/1.5 var(--app-font-sans);}
+.settings-inline{display:flex;align-items:center;gap:10px;margin-top:12px;color:#aebac5;font:11px var(--app-font-sans);}
+.settings-inline input{flex:1;}
+.settings-inline output{min-width:34px;text-align:right;color:#fff;font:11px var(--app-font-mono);}
+.keybind-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;}
+.keybind-item{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 10px;border:1px solid #2d3a44;border-radius:8px;background:#0b1116;color:#aebac5;font:10px var(--app-font-sans);}
+.keybind-item input{width:92px;height:28px;border:1px solid #3b4854;border-radius:6px;background:#141b22;color:#f3f6f8;padding:0 7px;font:10px var(--app-font-mono);text-align:center;}
+.keybind-item input:focus{outline:none;border-color:#ff4655;}
+@media(max-width:700px){.keybind-grid{grid-template-columns:1fr;}}
