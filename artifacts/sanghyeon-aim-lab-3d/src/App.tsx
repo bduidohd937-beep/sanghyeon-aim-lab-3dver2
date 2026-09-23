@@ -898,7 +898,7 @@ function TrainingSetup({
   onBack,
 }: {
   drill: Drill;
-  onStart: (drill: Drill, duration: number, difficulty: string) => void;
+  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean) => void;
   onBack: () => void;
 }) {
   const [difficulty, setDifficulty] = useState('operator');
