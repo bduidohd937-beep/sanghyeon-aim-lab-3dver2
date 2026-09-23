@@ -896,6 +896,7 @@ function TrainingSetup({
     const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
+    const pointerLockBlockedUntilRef = useRef(0);
     const [fps, setFps] = useState(0);
     const [shotError, setShotError] = useState<number | null>(null);
     const [shotErrorHistory, setShotErrorHistory] = useState<number[]>([]);
