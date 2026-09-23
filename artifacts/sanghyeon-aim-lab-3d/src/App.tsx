@@ -1594,11 +1594,12 @@ function TrainingSetup({
             className="crosshair-live"
           />
 
-          {aimCoach && (
-            <>
-              <div className="aim-coach-guide"><span>HEAD LEVEL</span></div>
-              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↓ 에임이 너무 높습니다 · 헤드라인 아래로 내리세요' : '↑ 에임이 너무 낮습니다 · 헤드라인 위로 올리세요'}</div>}
-            </>
+          {aimCoach && aimCoachWarning && aimCoachState !== 'ok' && (
+            <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>
+              {aimCoachState === 'low'
+                ? '↓ 에임이 너무 높습니다 · 헤드라인 아래로 내리세요'
+                : '↑ 에임이 너무 낮습니다 · 헤드라인 위로 올리세요'}
+            </div>
           )}
 
           {drill === 'braking' && (
