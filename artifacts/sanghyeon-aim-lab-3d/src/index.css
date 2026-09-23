@@ -1479,3 +1479,170 @@ body {
   .feedback-section .mode-option:last-child{border-bottom:0}
   .duration-row{grid-template-columns:1fr}
 }
+
+
+/* FINAL HOME / TRAINING FLOW POLISH */
+.home-layout{
+  width:min(1380px,calc(100% - 56px));
+  grid-template-columns:minmax(0,1fr) 360px;
+  gap:20px;
+  padding:46px 0 90px;
+}
+.home-main{
+  padding:58px 64px 64px;
+}
+.home-hero{
+  min-height:245px;
+}
+.hero-title{
+  font-size:clamp(64px,7.2vw,108px);
+  max-width:820px;
+  margin-top:20px;
+}
+.hero-copy{
+  font-size:17px;
+  max-width:620px;
+}
+.training-section{
+  margin-top:24px;
+}
+.training-section .section-title h2{
+  font-size:32px;
+}
+.drill-grid{
+  max-width:none;
+  gap:16px;
+  margin-top:20px;
+}
+.drill-card{
+  min-height:178px;
+  padding:22px;
+}
+.drill-card h3{
+  font-size:23px;
+}
+.drill-card p{
+  font-size:13px;
+  line-height:1.65;
+}
+.home-quick-actions{
+  border:1px solid #2b3540;
+  border-radius:16px;
+  background:linear-gradient(145deg,rgba(17,23,29,.97),rgba(10,14,18,.97));
+  box-shadow:0 20px 60px rgba(0,0,0,.24);
+  padding:34px 28px;
+  align-self:start;
+  position:sticky;
+  top:28px;
+}
+.home-quick-actions .panel-title{
+  font-size:28px;
+  margin:12px 0 20px;
+}
+.quick-action-grid{
+  display:grid;
+  gap:10px;
+}
+.quick-action-grid button{
+  width:100%;
+  min-height:78px;
+  display:grid;
+  grid-template-columns:42px 1fr auto;
+  align-items:center;
+  gap:12px;
+  padding:14px 15px;
+  border:1px solid #29343d;
+  border-radius:10px;
+  background:#10171e;
+  color:#e7edf0;
+  text-align:left;
+  transition:.16s;
+}
+.quick-action-grid button:hover{
+  transform:translateY(-2px);
+  border-color:#62d5a0;
+  background:#14231f;
+}
+.quick-action-grid button>span{
+  width:38px;
+  height:38px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:#182129;
+  font-size:20px;
+}
+.quick-action-grid button div{
+  min-width:0;
+}
+.quick-action-grid button strong{
+  display:block;
+  font-size:14px;
+  font-weight:800;
+}
+.quick-action-grid button small{
+  display:block;
+  margin-top:5px;
+  color:#71808b;
+  font-size:10px;
+}
+.quick-action-grid button>b{
+  color:#62d5a0;
+  font:800 18px var(--app-font-mono);
+}
+.home-quick-actions .panel-kicker{
+  font-size:10px;
+}
+
+/* Time is selected once on the setup screen. The target-count modal starts immediately. */
+.setup-launch-modal{
+  width:min(620px,calc(100% - 32px));
+}
+.setup-launch-modal h2{
+  margin-top:8px;
+}
+.setup-launch-modal p{
+  margin-bottom:18px;
+}
+.launch-choice-grid button{
+  min-height:88px;
+}
+.launch-choice-grid button small{
+  color:#74818c;
+}
+
+/* Aim-height coaching is now a quiet hitbox guide, never a repeated text warning. */
+.aim-coach-warning{
+  display:none!important;
+}
+
+@media(max-width:1100px){
+  .home-layout{
+    width:min(100% - 32px,900px);
+    grid-template-columns:1fr;
+  }
+  .home-quick-actions{
+    position:static;
+  }
+  .quick-action-grid{
+    grid-template-columns:repeat(2,1fr);
+  }
+}
+@media(max-width:700px){
+  .home-layout{
+    width:calc(100% - 24px);
+    padding-top:24px;
+  }
+  .home-main{
+    padding:36px 24px 42px;
+  }
+  .hero-title{
+    font-size:58px;
+  }
+  .drill-grid{
+    grid-template-columns:1fr;
+  }
+  .quick-action-grid{
+    grid-template-columns:1fr;
+  }
+}
