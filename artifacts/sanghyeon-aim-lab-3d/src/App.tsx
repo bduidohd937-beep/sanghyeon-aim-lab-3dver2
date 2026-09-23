@@ -587,105 +587,35 @@ function Home({
           </section>
         </main>
 
-        <aside className="side-panel">
+        <aside className="home-quick-actions">
           <div className="panel-kicker">
-            <span>PERSONAL RECORD</span>
-            <span>LIVE</span>
+            <span>LAB CONTROL</span>
+            <span>READY</span>
           </div>
-
-          <h2 className="panel-title">
-            오늘의 기록
-          </h2>
-
-          <div className="telemetry-hero">
-            <span className="metric-label">
-              최고 점수
-            </span>
-
-            <strong className="metric-value">
-              {best ? best.toLocaleString() : '--'}
-            </strong>
-
-            <span className="metric-caption">
-              {history.length
-                ? '현재 최고 기록'
-                : '훈련 기록이 없습니다'}
-            </span>
+          <h2 className="panel-title">빠른 설정</h2>
+          <div className="quick-action-grid">
+            <button onClick={() => onSelectDrill(drill)}>
+              <span>🎯</span>
+              <div><strong>지금 훈련하기</strong><small>선택한 훈련 바로 시작</small></div>
+              <b>→</b>
+            </button>
+            <button onClick={() => onNavigate('sensitivity')}>
+              <span>🖱️</span>
+              <div><strong>감도 설정</strong><small>VALORANT 감도 / eDPI</small></div>
+              <b>→</b>
+            </button>
+            <button onClick={() => onNavigate('growth')}>
+              <span>📊</span>
+              <div><strong>연습 기록</strong><small>전체 세션과 성장 추이</small></div>
+              <b>→</b>
+            </button>
+            <button onClick={() => onNavigate('crosshair')}>
+              <span>⚙️</span>
+              <div><strong>설정</strong><small>조준선 / 훈련 표시</small></div>
+              <b>→</b>
+            </button>
           </div>
-
-          <div className="side-rule" />
-
-          <div className="stat-list">
-            <div className="stat-row">
-              <span>훈련 횟수</span>
-              <strong>
-                {history.length
-                  .toString()
-                  .padStart(2, '0')}
-              </strong>
-            </div>
-
-            <div className="stat-row">
-              <span>최근 명중률</span>
-              <strong>
-                {history.length
-                  ? `${lastAccuracy.toFixed(1)}%`
-                  : '--'}
-              </strong>
-            </div>
-
-            <div className="stat-row">
-              <span>현재 감도</span>
-              <strong>
-                {settings.sensitivity.toFixed(2)}
-              </strong>
-            </div>
-          </div>
-
-          <div className="side-rule" />
-
-          <div className="history-title">
-            RECENT TRAINING
-          </div>
-
-          {history.length === 0 ? (
-            <div className="history-row">
-              <small>첫 훈련을 시작해보세요.</small>
-              <strong>--</strong>
-            </div>
-          ) : (
-            history.slice(0, 6).map((item, index) => (
-              <div
-                className="history-row"
-                key={`${item.date}-${index}`}
-              >
-                <div>
-                  <strong>
-                    {item.score.toLocaleString()}
-                  </strong>
-
-                  <small
-                    style={{
-                      display: 'block',
-                      marginTop: 4,
-                    }}
-                  >
-                    {item.drill === 'flick'
-                      ? 'FLICK'
-                      : item.drill === 'tracking'
-                        ? 'TRACKING'
-                        : 'BRAKING'}{' '}
-                    / {item.date}
-                  </small>
-                </div>
-
-                <em>
-                  {item.accuracy.toFixed(1)}%
-                </em>
-              </div>
-            ))
-          )}
-        </aside>
+        </aside></aside>
       </div>
     </div>
   );
@@ -706,7 +636,7 @@ function TrainingSetup({
   const [aimCoach, setAimCoach] = useState(false);
   const [flickBotCount, setFlickBotCount] = useState(3);
   const [flickMode, setFlickMode] = useState<FlickMode>('random');
-  const [launchStep, setLaunchStep] = useState<null | 'count' | 'time'>(null);
+  const [launchStep, setLaunchStep] = useState<null | 'count'>(null);
 
   const drillInfo = {
     flick: {
@@ -910,30 +840,19 @@ function TrainingSetup({
           </div>
 
           <button className="setup-start" onClick={() => drill === 'flick' ? setLaunchStep('count') : onStart(drill, duration, difficulty, feedbackEnabled, aimCoach)}>훈련 시작 <span>→</span></button>
-          {launchStep && (
+          {launchStep === 'count' && (
             <div className="modal-dim setup-launch-dim">
               <div className="pause-modal setup-launch-modal">
-                {launchStep === 'count' ? (
-                  <>
-                    <span className="launch-kicker">01 // TARGET COUNT</span><h2>동시 소환 타겟 수</h2>
-                    <p>선택한 수만큼 동시에 존재하며, 명중하면 즉시 새 타겟이 보충됩니다.</p>
-                    <div className="launch-choice-grid">
-                      {[1, 3, 5, 7, 12].map((count) => <button key={count} className={flickBotCount === count ? 'selected' : ''} onClick={() => { setFlickBotCount(count); setLaunchStep('time'); }}>{count}<small>TARGETS</small></button>)}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <span className="launch-kicker">02 // TRAINING TIME</span><h2>훈련 시간</h2>
-                    <p>이번 세션의 훈련 시간을 선택하세요.</p>
-                    <div className="launch-choice-grid time">
-                      {[15, 30, 60].map((time) => <button key={time} className={duration === time ? 'selected' : ''} onClick={() => setDuration(time)}>{time}<small>SEC</small></button>)}
-                    </div>
-                    <div className="modal-actions">
-                      <button className="secondary-button" onClick={() => setLaunchStep('count')}>← 이전</button>
-                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach, flickMode, flickBotCount); }}>훈련 시작 →</button>
-                    </div>
-                  </>
-                )}
+                <span className="launch-kicker">01 // TARGET COUNT</span>
+                <h2>동시 소환 타겟 수</h2>
+                <p>타겟 수를 선택하면 바로 훈련실로 들어갑니다. 시간은 위에서 선택한 {duration}초가 적용됩니다.</p>
+                <div className="launch-choice-grid">
+                  {[1, 3, 5, 7, 12].map((count) => (
+                    <button key={count} className={flickBotCount === count ? 'selected' : ''} onClick={() => { setFlickBotCount(count); setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach, flickMode, count); }}>
+                      {count}<small>TARGETS · START</small>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -955,8 +874,6 @@ function TrainingSetup({
     const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
-    const [aimCoachWarning, setAimCoachWarning] = useState(false);
-    const [aimCoachState, setAimCoachState] = useState<'low' | 'high' | 'ok'>('ok');
     const [fps, setFps] = useState(0);
     const [shotError, setShotError] = useState<number | null>(null);
     const [shotErrorHistory, setShotErrorHistory] = useState<number[]>([]);
@@ -1379,46 +1296,33 @@ function TrainingSetup({
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
           if (aimCoach) {
-            // 피드백은 타겟의 머리/히트박스를 사용하지 않고 고정 헤드라인만 기준으로 합니다.
-            const screenHeight = renderer.domElement.clientHeight;
-            const cameraDirection = new THREE.Vector3();
-            camera.getWorldDirection(cameraDirection);
-
-            let headlineX = 0;
-            if (Math.abs(cameraDirection.z) > 0.0001) {
-              const t = (HEADLINE_Z - camera.position.z) / cameraDirection.z;
-              if (t > 0) {
-                headlineX = THREE.MathUtils.clamp(
-                  camera.position.x + cameraDirection.x * t,
-                  -HEADLINE_HALF_WIDTH,
-                  HEADLINE_HALF_WIDTH,
-                );
+            // 실제 머리 히트박스 위치를 기준으로만 교정선을 움직입니다.
+            // 고정된 HEADLINE_Y를 기준으로 경고하지 않아, 가까이/멀리 생성된 봇도 정확히 따라갑니다.
+            let bestHead: THREE.Object3D | null = null;
+            let bestDistance = Infinity;
+            const candidates: THREE.Object3D[] = [];
+            group.traverse((object) => {
+              if (object.name === 'head' || object.name === 'target') candidates.push(object);
+            });
+            const center = new THREE.Vector2(0, 0);
+            for (const candidate of candidates) {
+              const projected = candidate.getWorldPosition(new THREE.Vector3()).project(camera);
+              const distance = Math.hypot(projected.x - center.x, projected.y - center.y);
+              if (distance < bestDistance) {
+                bestDistance = distance;
+                bestHead = candidate;
               }
             }
-
-            const headlineScreen = new THREE.Vector3(
-              headlineX,
-              HEADLINE_Y,
-              HEADLINE_Z,
-            ).project(camera);
-            const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
-            const crosshairY = screenHeight * .5;
-            const pixelPadding = 4;
-            const deltaY = crosshairY - headlineYpx;
-
-            const nextAimState: 'low' | 'high' | 'ok' =
-              Math.abs(deltaY) <= pixelPadding
-                ? 'ok'
-                : deltaY < 0
-                  ? 'high'
-                  : 'low';
-
-            setAimCoachState(nextAimState);
-            setAimCoachWarning(nextAimState !== 'ok');
-            aimGuide.visible = true;
+            if (bestHead) {
+              const headWorld = bestHead.getWorldPosition(new THREE.Vector3());
+              const left = new THREE.Vector3(headWorld.x - HEADLINE_HALF_WIDTH, headWorld.y, headWorld.z);
+              const right = new THREE.Vector3(headWorld.x + HEADLINE_HALF_WIDTH, headWorld.y, headWorld.z);
+              aimGuide.geometry.setFromPoints([left, right]);
+              aimGuide.visible = true;
+            } else {
+              aimGuide.visible = false;
+            }
           } else {
-            setAimCoachState('ok');
-            setAimCoachWarning(false);
             aimGuide.visible = false;
           }
           if (drill === 'tracking' && targetRootRef.current) {
@@ -1581,14 +1485,6 @@ function TrainingSetup({
             config={settings.crosshair}
             className="crosshair-live"
           />
-
-          {aimCoach && aimCoachWarning && aimCoachState !== 'ok' && (
-            <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>
-              {aimCoachState === 'high'
-                ? '↓ 에임이 너무 높습니다 · 헤드라인 아래로 내리세요'
-                : '↑ 에임이 너무 낮습니다 · 헤드라인 위로 올리세요'}
-            </div>
-          )}
 
           {drill === 'braking' && (
             <div className="braking-guide">
