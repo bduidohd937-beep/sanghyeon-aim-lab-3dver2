@@ -950,6 +950,7 @@ function TrainingSetup({
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
     const [aimCoachWarning, setAimCoachWarning] = useState(false);
+    const [aimCoachState, setAimCoachState] = useState<'low' | 'high' | 'ok'>('ok');
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
     const targetRootRef = useRef<THREE.Group | null>(null);
     const brakingMovedRef = useRef(false);
@@ -1057,7 +1058,6 @@ function TrainingSetup({
       };
 
       const brakingStopThreshold = .16;
-      let aimCoachState: 'low' | 'high' | 'ok' = 'ok';
       const spawn = () => {
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
@@ -1380,11 +1380,11 @@ function TrainingSetup({
             const nextAimState: 'low' | 'high' | 'ok' =
               projectedY < 1.28 ? 'low' : projectedY > 1.78 ? 'high' : 'ok';
             if (nextAimState !== aimCoachState) {
-              aimCoachState = nextAimState;
+              setAimCoachState(nextAimState);
               setAimCoachWarning(nextAimState !== 'ok');
             }
           } else if (aimCoachState !== 'ok') {
-            aimCoachState = 'ok';
+            setAimCoachState('ok');
             setAimCoachWarning(false);
           }
           if (drill === 'tracking' && targetRootRef.current) {
