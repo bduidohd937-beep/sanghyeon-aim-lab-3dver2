@@ -1048,26 +1048,6 @@ body {
   border-color:#566174;
   transform:translateY(-1px);
 }
-.aim-coach-guide{
-  position:absolute;
-  left:50%;
-  top:43%;
-  width:min(520px,42vw);
-  height:1px;
-  background:rgba(163,255,39,.34);
-  box-shadow:0 0 8px rgba(163,255,39,.12);
-  transform:translateX(-50%);
-  pointer-events:none;
-  z-index:4;
-}
-.aim-coach-guide span{
-  position:absolute;
-  right:0;
-  bottom:7px;
-  font:700 9px var(--app-font-mono);
-  letter-spacing:.12em;
-  color:rgba(163,255,39,.62);
-}
 .aim-coach-warning{
   position:absolute;
   left:50%;
@@ -1168,7 +1148,6 @@ body {
 .telemetry-bars i{flex:1;min-height:4px;background:#62d5a0;opacity:.8;border-radius:2px 2px 0 0}
 .telemetry-graph small{display:block;margin-top:7px;color:#66737e;font-size:8px}
 .aim-coach-warning.high{border-color:rgba(255,110,110,.5);color:#ff858f}
-.aim-coach-guide{top:43%;background:rgba(163,255,39,.42);opacity:.9}
 @media(max-width:900px){
   .result-identity{flex-direction:column;align-items:stretch}
   .result-score-hero{text-align:left}
