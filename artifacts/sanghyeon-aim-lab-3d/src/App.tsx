@@ -955,6 +955,7 @@ function TrainingSetup({
     const [aimCoachState, setAimCoachState] = useState<'low' | 'high' | 'ok'>('ok');
     const [fps, setFps] = useState(0);
     const [shotError, setShotError] = useState<number | null>(null);
+    const [shotErrorHistory, setShotErrorHistory] = useState<number[]>([]);
     const reactionSamplesRef = useRef<number[]>([]);
     const targetSpawnAtRef = useRef(performance.now());
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
@@ -1261,15 +1262,15 @@ function TrainingSetup({
           reactionSamplesRef.current.push(reaction);
           if (reactionSamplesRef.current.length > 100) reactionSamplesRef.current.shift();
         }
-        if (targetRootRef.current) {
-          const targetCenter = new THREE.Vector3();
-          targetRootRef.current.getWorldPosition(targetCenter);
-          const aimDirection = camera.getWorldDirection(new THREE.Vector3());
-          const targetDirection = targetCenter.sub(camera.position).normalize();
-          const error = THREE.MathUtils.radToDeg(aimDirection.angleTo(targetDirection));
-          setShotError(error);
-        }
-
+        // 발사 오차는 발사 순간의 이동 상태를 측정합니다.
+        // 정지 또는 확실한 브레이킹 상태에서는 0, 움직이는 중 발사하면 오차가 커집니다.
+        const movementSpeed = velocity.length();
+        const isBrakingStable = drill === 'braking'
+          ? movementSpeed <= brakingStopThreshold
+          : movementSpeed <= 0.06;
+        const shotErrorValue = isBrakingStable ? 0 : Math.min(12, movementSpeed * 2.8);
+        setShotError(shotErrorValue);
+        setShotErrorHistory((current) => [...current.slice(-17), shotErrorValue]);
         const next = {
           ...statsRef.current,
           shots: statsRef.current.shots + 1,
@@ -1596,7 +1597,7 @@ function TrainingSetup({
           {aimCoach && (
             <>
               <div className="aim-coach-guide"><span>HEAD LEVEL</span></div>
-              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↑ 에임이 너무 낮습니다 · 헤드라인으로 올리세요' : '↓ 에임이 너무 높습니다 · 헤드라인으로 내리세요'}</div>}
+              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↓ 에임이 너무 높습니다 · 헤드라인 아래로 내리세요' : '↑ 에임이 너무 낮습니다 · 헤드라인 위로 올리세요'}</div>}
             </>
           )}
 
@@ -1638,12 +1639,17 @@ function TrainingSetup({
                 <div className="telemetry-graph">
                   <span className="telemetry-graph-title">SHOT ERROR</span>
                   <div className="telemetry-bars">
-                    {[...Array(18)].map((_, i) => {
-                      const value = shotError === null ? 0 : Math.min(100, shotError * 12 + ((i * 7) % 11));
-                      return <i key={i} style={{ height: `${Math.max(6, value)}%` }} />;
-                    })}
+                    {shotErrorHistory.length === 0
+                      ? [...Array(18)].map((_, i) => <i key={i} className="telemetry-idle-dot" />)
+                      : shotErrorHistory.map((value, i) => (
+                        <i
+                          key={i}
+                          className={value > 0 ? 'telemetry-error-bar' : 'telemetry-stable-bar'}
+                          style={{ height: String(Math.max(value > 0 ? 10 : 7, value * 7 + 7)) + '%' }}
+                        />
+                      ))}
                   </div>
-                  <small>실시간 발사 오차</small>
+                  <small>미발사 · 정지 발사 0 · 이동 발사 오차</small>
                 </div>
               )}
             </div>
@@ -2285,3 +2291,8 @@ function App() {
 }
 
 export default App;
+
+
+
+
+
