@@ -8,7 +8,7 @@ import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, X } from 'lucide-react';
 import * as THREE from 'three';
 
-type Drill = 'flick' | 'reaction' | 'tracking' | 'braking' | 'switching' | 'micro';
+type Drill = 'flick' | 'tracking' | 'braking';
 type TrainingConfig = {
   drill: Drill;
   duration: number;
@@ -473,11 +473,11 @@ function Home({
 
   const drillInfo = {
     flick: { icon: <Crosshair size={30} />, tag: '01', title: 'FLICK', korean: '순간 조준', desc: '출현하는 타겟을 빠르게 포착하고 정확하게 클릭합니다.', active: true },
-    reaction: { icon: <Target size={30} />, tag: '02', title: 'REACTION', korean: '시각 반응', desc: '랜덤 위치의 훈련봇을 보고 빠르게 반응합니다.', active: true },
-    tracking: { icon: <Target size={30} />, tag: '03', title: 'TRACKING', korean: '추적 조준', desc: '움직이는 훈련봇의 머리를 따라가며 조준합니다.', active: true },
-    braking: { icon: <Gauge size={30} />, tag: '04', title: 'BRAKING', korean: '감속 조준', desc: '이동을 멈추는 순간 훈련봇의 머리를 맞춥니다.', active: true },
-    switching: { icon: <Target size={30} />, tag: '05', title: 'SWITCHING', korean: '타겟 전환', desc: '랜덤 위치의 훈련봇으로 빠르게 전환합니다.', active: true },
-    micro: { icon: <Crosshair size={30} />, tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 거리의 정밀한 훈련봇 헤드 조준을 연습합니다.', active: true },
+    reaction: { icon: <Target size={30} />, tag: '02', title: 'REACTION', korean: '시각 반응', desc: '나타나는 순간을 보고 빠르게 반응합니다.', active: false },
+    tracking: { icon: <Target size={30} />, tag: '03', title: 'TRACKING', korean: '추적 조준', desc: '움직이는 타겟을 따라가며 안정적인 조준을 훈련합니다.', active: true },
+    braking: { icon: <Gauge size={30} />, tag: '04', title: 'BRAKING', korean: '감속 조준', desc: '이동을 멈추는 순간 정확하게 첫 발을 맞춥니다.', active: true },
+    switching: { icon: <Target size={30} />, tag: '05', title: 'SWITCHING', korean: '타겟 전환', desc: '여러 타겟 사이를 빠르고 정확하게 전환합니다.', active: false },
+    micro: { icon: <Crosshair size={30} />, tag: '06', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 거리의 정밀한 조준 보정을 훈련합니다.', active: false },
   };
 
   return (
@@ -703,12 +703,24 @@ function TrainingSetup({
   const [aimCoach, setAimCoach] = useState(false);
 
   const drillInfo = {
-    flick: { title: 'FLICK', korean: '순간 조준', desc: '랜덤 위치에 나타나는 훈련봇의 머리를 빠르게 맞춥니다.', icon: '🎯' },
-    reaction: { title: 'REACTION', korean: '시각 반응', desc: '랜덤 위치에 나타난 훈련봇을 보고 빠르게 반응합니다.', icon: '⚡' },
-    tracking: { title: 'TRACKING', korean: '추적 조준', desc: '좌우로 움직이는 훈련봇의 헤드라인을 안정적으로 따라갑니다.', icon: '👁️' },
-    braking: { title: 'BRAKING', korean: '감속 조준', desc: '이동 후 정확히 멈추고 훈련봇의 머리를 맞춥니다.', icon: '🛑' },
-    switching: { title: 'SWITCHING', korean: '타겟 전환', desc: '랜덤 위치로 빠르게 바뀌는 훈련봇 사이를 전환합니다.', icon: '🔀' },
-    micro: { title: 'MICRO FLICK', korean: '미세 플릭', desc: '중앙 주변의 작은 거리에서 훈련봇 머리를 정밀하게 맞춥니다.', icon: '🎯' },
+    flick: {
+      title: 'FLICK',
+      korean: '순간 조준',
+      desc: '빠르게 등장하는 목표를 정확하게 클릭합니다.',
+      icon: '🎯',
+    },
+    tracking: {
+      title: 'TRACKING',
+      korean: '추적 조준',
+      desc: '움직이는 목표의 머리 라인을 안정적으로 따라갑니다.',
+      icon: '👁️',
+    },
+    braking: {
+      title: 'BRAKING',
+      korean: '감속 조준',
+      desc: '이동 후 정확히 멈추고 첫 발을 맞춥니다.',
+      icon: '⚡',
+    },
   }[drill] ?? {
     title: 'TRAINING',
     korean: '에임 훈련',
@@ -1098,8 +1110,26 @@ function TrainingSetup({
           emissiveIntensity: 0.2,
         });
 
-        // 모든 훈련 모드는 동일한 훈련 봇 + 헤드 히트박스를 사용한다.
-        // 모드마다 스폰 위치/움직임만 다르게 해서 실제 조준 훈련처럼 만든다.
+        if (drill === 'flick') {
+          const sphere = new THREE.Mesh(
+            new THREE.SphereGeometry(.30 * botScale, 24, 18),
+            redAccentMat
+          );
+          sphere.name = 'head';
+          sphere.position.set(
+            (Math.random() - .5) * 5.0,
+            1.65 + Math.random() * 1.6,
+            -7.5 - Math.random() * 2.0
+          );
+          sphere.castShadow = true;
+          root.add(sphere);
+          group.add(root);
+          targetRootRef.current = root;
+          targetMeshRef.current = sphere;
+          brakingMovedRef.current = false;
+          return;
+        }
+
         // VALORANT-style training bot model.
         const neck = new THREE.Mesh(
           new THREE.CylinderGeometry(.08 * botScale, .1 * botScale, .15 * botScale, 8),
@@ -1255,37 +1285,17 @@ function TrainingSetup({
           calfR
         );
 
-        // 모든 모드의 로봇 머리는 동일한 HEADLINE 높이에 맞춘다.
+        // Keep the robot head centered on the fixed world-space headline.
         const robotRootY = HEADLINE_Y - head.position.y;
-        let spawnX = 0;
-        let spawnY = robotRootY;
-        let spawnZ = -9.0;
-
-        if (drill === 'flick' || drill === 'reaction') {
-          spawnX = (Math.random() - .5) * 8.0;
-          spawnY = robotRootY + (Math.random() - .5) * 1.4;
-          spawnZ = -7.8 - Math.random() * 2.8;
-        } else if (drill === 'micro') {
-          // 중앙 주변의 작은 거리만 움직이는 미세 플릭.
-          spawnX = (Math.random() - .5) * 2.4;
-          spawnY = robotRootY + (Math.random() - .5) * .45;
-          spawnZ = -8.2 - Math.random() * 1.8;
-        } else if (drill === 'switching') {
-          // 좌/우/상/하를 크게 바꾸며 다음 타겟으로 전환한다.
-          spawnX = (Math.random() - .5) * 9.0;
-          spawnY = robotRootY + (Math.random() - .5) * 1.8;
-          spawnZ = -7.5 - Math.random() * 2.5;
-        } else if (drill === 'braking') {
-          spawnX = (Math.random() - .5) * 8.0;
-          spawnY = robotRootY;
-          spawnZ = -8.0 - Math.random() * 1.5;
-        } else if (drill === 'tracking') {
-          spawnX = (Math.random() - .5) * 4.0;
-          spawnY = robotRootY;
-          spawnZ = -9.0;
+        if (drill === 'braking') {
+          root.position.set(
+            (Math.random() - .5) * 8.0,
+            robotRootY,
+            -8.0 - Math.random() * 1.5
+          );
+        } else {
+          root.position.set(0, robotRootY, -9.0);
         }
-
-        root.position.set(spawnX, spawnY, spawnZ);
 
         root.traverse((object) => {
           if (object instanceof THREE.Mesh) object.castShadow = true;
@@ -1325,7 +1335,7 @@ function TrainingSetup({
         const headHit = intersections.some((item) => item.object === targetMeshRef.current);
         const bodyHit = intersections.length > 0 && !headHit;
         const reaction = performance.now() - targetSpawnAtRef.current;
-        if ((drill === 'flick' || drill === 'reaction' || drill === 'micro') && Number.isFinite(reaction)) {
+        if (drill === 'flick' && Number.isFinite(reaction)) {
           reactionSamplesRef.current.push(reaction);
           if (reactionSamplesRef.current.length > 100) reactionSamplesRef.current.shift();
         }
@@ -1350,14 +1360,6 @@ function TrainingSetup({
         const brakingNoMovement =
           drill === 'braking' && !brakingMovedRef.current;
 
-        const modeNeedsHead =
-          drill === 'flick' ||
-          drill === 'reaction' ||
-          drill === 'tracking' ||
-          drill === 'braking' ||
-          drill === 'switching' ||
-          drill === 'micro';
-
         const shotDirection = new THREE.Vector3();
         camera.getWorldDirection(shotDirection);
 
@@ -1377,7 +1379,7 @@ function TrainingSetup({
             miss: true,
             id: Date.now(),
           });
-        } else if (headHit && modeNeedsHead && !brakingMoving) {
+        } else if (headHit && !brakingMoving) {
           next.hits += 1;
           next.streak += 1;
           next.maxStreak = Math.max(next.maxStreak ?? 0, next.streak);
@@ -1509,62 +1511,22 @@ function TrainingSetup({
               }
             }
 
+            const headlineScreen = new THREE.Vector3(
+              headlineX,
+              HEADLINE_Y,
+              HEADLINE_Z,
+            ).project(camera);
+            const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
             const crosshairY = screenHeight * .5;
-            const crosshairX = renderer.domElement.clientWidth * .5;
-            let headlineTopPx: number | null = null;
-            let headlineBottomPx: number | null = null;
+            const pixelPadding = 4;
+            const deltaY = crosshairY - headlineYpx;
 
-            // 로봇은 실제 헤드 히트박스 높이 전체를 HEADLINE 판정 범위로 사용한다.
-            // 그래서 조준선이 머리 중앙에서 몇 px만 벗어나도 바로 경고하지 않고,
-            // 실제로 머리에 맞을 수 있는 위/아래 영역 안에서는 OK로 처리한다.
-            const coachHead = targetMeshRef.current;
-            const coachRoot = targetRootRef.current;
-            if (
-              coachHead &&
-              coachRoot &&
-              coachHead.name === 'head'
-            ) {
-              const headWorld = new THREE.Vector3();
-              coachHead.getWorldPosition(headWorld);
-
-              const headHalfHeight = 0.14;
-              const topWorld = new THREE.Vector3(
-                headWorld.x,
-                headWorld.y + headHalfHeight,
-                headWorld.z,
-              );
-              const bottomWorld = new THREE.Vector3(
-                headWorld.x,
-                headWorld.y - headHalfHeight,
-                headWorld.z,
-              );
-
-              const topScreen = topWorld.project(camera);
-              const bottomScreen = bottomWorld.project(camera);
-              const topPx = (1 - topScreen.y) * .5 * screenHeight;
-              const bottomPx = (1 - bottomScreen.y) * .5 * screenHeight;
-
-              headlineTopPx = Math.min(topPx, bottomPx);
-              headlineBottomPx = Math.max(topPx, bottomPx);
-            } else {
-              const headlineScreen = new THREE.Vector3(
-                headlineX,
-                HEADLINE_Y,
-                HEADLINE_Z,
-              ).project(camera);
-              const headlineYpx = (1 - headlineScreen.y) * .5 * screenHeight;
-              const headlinePadding = 6;
-              headlineTopPx = headlineYpx - headlinePadding;
-              headlineBottomPx = headlineYpx + headlinePadding;
-            }
-
-            const hitboxPadding = 2;
             const nextAimState: 'low' | 'high' | 'ok' =
-              crosshairY < (headlineTopPx as number) - hitboxPadding
-                ? 'high'
-                : crosshairY > (headlineBottomPx as number) + hitboxPadding
-                  ? 'low'
-                  : 'ok';
+              Math.abs(deltaY) <= pixelPadding
+                ? 'ok'
+                : deltaY < 0
+                  ? 'high'
+                  : 'low';
 
             setAimCoachState(nextAimState);
             setAimCoachWarning(nextAimState !== 'ok');
@@ -2119,7 +2081,7 @@ function TrainingSetup({
     );
   }
   function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
-    const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'reaction' ? 'REACTION' : stats.drill === 'tracking' ? 'TRACKING' : stats.drill === 'braking' ? 'BRAKING' : stats.drill === 'switching' ? 'SWITCHING' : 'MICRO FLICK';
+    const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
     const reaction = stats.avgReaction ?? 0;
     const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 250) / 8)) : stats.accuracy;
     const sessionScore = Math.max(0, Math.min(100, Math.round(stats.accuracy * .72 + reactionScore * .28)));
@@ -2192,15 +2154,16 @@ function TrainingSetup({
       )
       : 0;
 
-    const modules: Drill[] = ['flick', 'reaction', 'tracking', 'braking', 'switching', 'micro'];
+    const modules: Drill[] = [
+      'flick',
+      'tracking',
+      'braking',
+    ];
 
     const moduleName = (type: Drill) => {
       if (type === 'flick') return 'FLICK';
-      if (type === 'reaction') return 'REACTION';
       if (type === 'tracking') return 'TRACKING';
-      if (type === 'braking') return 'BRAKING';
-      if (type === 'switching') return 'SWITCHING';
-      return 'MICRO FLICK';
+      return 'BRAKING';
     };
 
     return (
