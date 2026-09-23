@@ -981,7 +981,7 @@ function TrainingSetup({
       const scene = new THREE.Scene();
       scene.background = new THREE.Color('#081116');
       scene.fog = new THREE.Fog('#081116', 8, 34);
-      const camera = new THREE.PerspectiveCamera(72, mount.clientWidth / mount.clientHeight, 0.1, 100);
+      const camera = new THREE.PerspectiveCamera(70.53, mount.clientWidth / mount.clientHeight, 0.1, 100);
       camera.position.set(0, 1.6, 6);
       camera.rotation.order = 'YXZ';
       let yaw = 0;
@@ -994,9 +994,9 @@ function TrainingSetup({
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#111c21', roughness: .88, metalness: .2 })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
       const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
       const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
-      const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
+      const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -10.5); scene.add(backWall);
       const HEADLINE_Y = 1.65;
-      const HEADLINE_Z = -6.83;
+      const HEADLINE_Z = -9.0;
       const HEADLINE_HALF_WIDTH = 12.5;
       const aimGuideGeometry = new THREE.BufferGeometry().setFromPoints([
         new THREE.Vector3(-HEADLINE_HALF_WIDTH, HEADLINE_Y, HEADLINE_Z),
@@ -1085,7 +1085,7 @@ function TrainingSetup({
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
 
-        const botScale = difficulty === 'trainee' ? 1.0 : difficulty === 'hell' ? 0.78 : difficulty === 'elite' ? 0.84 : 0.92;
+        const botScale = 1.0;
         const armorMat = new THREE.MeshStandardMaterial({
           color: '#2b2d35',
           roughness: 0.4,
@@ -1119,7 +1119,7 @@ function TrainingSetup({
           sphere.position.set(
             (Math.random() - .5) * 5.0,
             1.65 + Math.random() * 1.6,
-            -5.0 - Math.random() * 1.4
+            -7.5 - Math.random() * 2.0
           );
           sphere.castShadow = true;
           root.add(sphere);
@@ -1256,14 +1256,14 @@ function TrainingSetup({
           darkMat
         );
         calfL.name = 'body';
-        calfL.position.set(-.18 * botScale, -.05, .05 * botScale);
+        calfL.position.set(-.18 * botScale, .225, .05 * botScale);
 
         const calfR = new THREE.Mesh(
           new THREE.CylinderGeometry(.06 * botScale, .05 * botScale, .45 * botScale, 8),
           darkMat
         );
         calfR.name = 'body';
-        calfR.position.set(.18 * botScale, -.05, -.05 * botScale);
+        calfR.position.set(.18 * botScale, .225, -.05 * botScale);
 
         root.add(
           neck,
@@ -1291,10 +1291,10 @@ function TrainingSetup({
           root.position.set(
             (Math.random() - .5) * 8.0,
             robotRootY,
-            -4.8 - Math.random() * 1.5
+            -8.0 - Math.random() * 1.5
           );
         } else {
-          root.position.set(0, robotRootY, -5.6);
+          root.position.set(0, robotRootY, -9.0);
         }
 
         root.traverse((object) => {
@@ -1314,7 +1314,7 @@ function TrainingSetup({
       const velocity = new THREE.Vector3();
       const onPointerMove = (event: PointerEvent) => {
         if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
-        const lookScale = .0016 * sensitivityRef.current;
+        const lookScale = THREE.MathUtils.degToRad(0.07) * sensitivityRef.current;
         yaw -= (event.movementX || 0) * lookScale;
         pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
         camera.rotation.set(pitch, yaw, 0);
@@ -1565,7 +1565,7 @@ function TrainingSetup({
             root.position.x += tracking.velocity * delta;
             root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
             root.position.y = HEADLINE_Y - 1.65;
-            root.position.z = -5.75;
+            root.position.z = -9.0;
             root.rotation.y = 0;
 
             tracking.timer -= delta;
