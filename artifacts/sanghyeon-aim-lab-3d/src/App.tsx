@@ -897,6 +897,7 @@ function TrainingSetup({
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
     const pointerLockBlockedUntilRef = useRef(0);
+    const pointerLockRequestPendingRef = useRef(false);
     const [fps, setFps] = useState(0);
     const [shotError, setShotError] = useState<number | null>(null);
     const [shotErrorHistory, setShotErrorHistory] = useState<number[]>([]);
@@ -1151,25 +1152,28 @@ function TrainingSetup({
         camera.rotation.set(pitch, yaw, 0);
       };
       const requestPointerLockSafe = () => {
+        if (pointerLockRequestPendingRef.current) return;
         if (Date.now() < pointerLockBlockedUntilRef.current) return;
         if (document.pointerLockElement === renderer.domElement) return;
+        pointerLockRequestPendingRef.current = true;
         try {
           const result = renderer.domElement.requestPointerLock?.();
           if (result && typeof (result as Promise<void>).catch === 'function') {
-            void (result as Promise<void>).catch(() => {
-              pointerLockBlockedUntilRef.current = Date.now() + 500;
+            void (result as Promise<void>).catch(() => {}).finally(() => {
+              pointerLockRequestPendingRef.current = false;
             });
+          } else {
+            pointerLockRequestPendingRef.current = false;
           }
-        } catch {}
+        } catch {
+          pointerLockRequestPendingRef.current = false;
+        }
       };
       const onShoot = (event: MouseEvent) => {
         if (statusRef.current !== 'active') return;
         if (event.target !== renderer.domElement) return;
         event.preventDefault();
-        if (document.pointerLockElement !== renderer.domElement) {
-          requestPointerLockSafe();
-          return;
-        }
+        if (document.pointerLockElement !== renderer.domElement) return;
 
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
         const intersections = targetRootRef.current
