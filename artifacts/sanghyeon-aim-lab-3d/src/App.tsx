@@ -1,4 +1,4 @@
-﻿import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -996,8 +996,8 @@ function TrainingSetup({
       const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
       const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
       const aimGuideGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-12.5, 1.88, -6.83),
-        new THREE.Vector3(12.5, 1.88, -6.83),
+        new THREE.Vector3(-12.5, 1.65, -6.83),
+        new THREE.Vector3(12.5, 1.65, -6.83),
       ]);
       const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: .58, depthTest: false });
       const aimGuide = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
@@ -1502,19 +1502,19 @@ function TrainingSetup({
               const headMaxPx = Math.max(headTopPx, headBottomPx);
               const crosshairY = screenHeight * .5;
               const pixelPadding = 2;
+
+              // 화면 Y 기준: 작을수록 위쪽입니다.
+              // 머리보다 위 = 에임이 너무 높음 / 머리보다 아래 = 에임이 너무 낮음.
               const nextAimState: 'low' | 'high' | 'ok' =
                 crosshairY < headMinPx - pixelPadding
                   ? 'high'
                   : crosshairY > headMaxPx + pixelPadding
                     ? 'low'
                     : 'ok';
+
               setAimCoachState(nextAimState);
               setAimCoachWarning(nextAimState !== 'ok');
-              const headWorld = target.getWorldPosition(new THREE.Vector3());
-              const guidePosition = aimGuide.geometry.getAttribute('position');
-              guidePosition.setY(0, headWorld.y);
-              guidePosition.setY(1, headWorld.y);
-              guidePosition.needsUpdate = true;
+              // 헤드라인은 타겟 위치와 무관하게 고정된 월드 높이입니다.
               aimGuide.visible = true;
             } else {
               setAimCoachState('ok');
@@ -1689,7 +1689,7 @@ function TrainingSetup({
 
           {aimCoach && aimCoachWarning && aimCoachState !== 'ok' && (
             <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>
-              {aimCoachState === 'low'
+              {aimCoachState === 'high'
                 ? '↓ 에임이 너무 높습니다 · 헤드라인 아래로 내리세요'
                 : '↑ 에임이 너무 낮습니다 · 헤드라인 위로 올리세요'}
             </div>
