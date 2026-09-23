@@ -48,13 +48,35 @@ type  CrosshairConfig = {
   centerDot: boolean;
 };
 type TelemetryMode = 'off' | 'text' | 'graph' | 'both';
-type Settings = { sensitivity: number; crosshair: CrosshairConfig; telemetryMode: TelemetryMode };
+type WeaponId = 'classic' | 'ghost' | 'sheriff' | 'guardian' | 'vandal' | 'phantom' | 'marshal' | 'operator' | 'ares' | 'odin';
+type Keybinds = { forward: string; left: string; back: string; right: string; crouch: string; walk: string; jump: string };
+type Settings = {
+  sensitivity: number;
+  crosshair: CrosshairConfig;
+  telemetryMode: TelemetryMode;
+  weapon: WeaponId;
+  moveSpeed: number;
+  keybinds: Keybinds;
+};
+const WEAPONS: Record<WeaponId, { name: string; type: string; fireRate: number; spread: number; damage: number; magazine: number; recoil: number; automatic: boolean }> = {
+  classic:{name:'클래식',type:'보조',fireRate:6.75,spread:.38,damage:78,magazine:12,recoil:.72,automatic:false},
+  ghost:{name:'고스트',type:'보조',fireRate:6.75,spread:.30,damage:105,magazine:13,recoil:.62,automatic:false},
+  sheriff:{name:'셰리프',type:'보조',fireRate:4,spread:.25,damage:159,magazine:6,recoil:.95,automatic:false},
+  guardian:{name:'가디언',type:'소총',fireRate:5.25,spread:.18,damage:195,magazine:12,recoil:.82,automatic:false},
+  vandal:{name:'밴달',type:'소총',fireRate:9.75,spread:.25,damage:160,magazine:25,recoil:1,automatic:true},
+  phantom:{name:'팬텀',type:'소총',fireRate:11,spread:.20,damage:156,magazine:30,recoil:.86,automatic:true},
+  marshal:{name:'마샬',type:'저격',fireRate:1.5,spread:.05,damage:202,magazine:5,recoil:1.15,automatic:false},
+  operator:{name:'오퍼레이터',type:'저격',fireRate:.6,spread:.035,damage:255,magazine:5,recoil:1.35,automatic:false},
+  ares:{name:'아레스',type:'중기관총',fireRate:13,spread:.42,damage:160,magazine:50,recoil:1.08,automatic:true},
+  odin:{name:'오딘',type:'중기관총',fireRate:12,spread:.46,damage:160,magazine:100,recoil:1.12,automatic:true},
+};
+const DEFAULT_KEYBINDS: Keybinds = { forward:'KeyW', left:'KeyA', back:'KeyS', right:'KeyD', crouch:'KeyC', walk:'ShiftLeft', jump:'Space' };
 type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number; avgReaction?: number; bestReaction?: number; overshoots?: number; maxStreak?: number };
 type HistoryItem = { score: number; accuracy: number; drill: Drill; date: string; hits?: number; shots?: number; streak?: number };
 
 const queryClient = new QueryClient();
 const DEFAULT_CROSSHAIR: CrosshairConfig = { style: 'classic', color: '#ffffff', size: 36, gap: 5, thickness: 2, outline: true, centerDot: false };
-const DEFAULT_SETTINGS: Settings = { sensitivity: 1.15, crosshair: DEFAULT_CROSSHAIR, telemetryMode: 'off' };
+const DEFAULT_SETTINGS: Settings = { sensitivity: 1.15, crosshair: DEFAULT_CROSSHAIR, telemetryMode: 'off', weapon: 'vandal', moveSpeed: 4.5, keybinds: DEFAULT_KEYBINDS };
 
 const CROSSHAIR_PRESETS: Record<string, CrosshairConfig> = {
   'CLASSIC': {
@@ -153,12 +175,18 @@ function saveStorage(key: string, value: unknown) {
 
 function normalizeSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object') return DEFAULT_SETTINGS;
-  const value = raw as { sensitivity?: unknown; crosshair?: unknown; telemetryMode?: unknown };
+  const value = raw as { sensitivity?: unknown; crosshair?: unknown; telemetryMode?: unknown; weapon?: unknown; moveSpeed?: unknown; keybinds?: unknown };
   const sensitivity = typeof value.sensitivity === 'number' ? value.sensitivity : DEFAULT_SETTINGS.sensitivity;
   const telemetryMode: TelemetryMode = value.telemetryMode === 'text' || value.telemetryMode === 'graph' || value.telemetryMode === 'both' ? value.telemetryMode : 'off';
-  if (typeof value.crosshair === 'number') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, size: value.crosshair }, telemetryMode };
-  if (value.crosshair && typeof value.crosshair === 'object') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) }, telemetryMode };
-  return { sensitivity, crosshair: DEFAULT_CROSSHAIR, telemetryMode };
+  const weapon = typeof value.weapon === 'string' && value.weapon in WEAPONS ? value.weapon as WeaponId : DEFAULT_SETTINGS.weapon;
+  const moveSpeed = typeof value.moveSpeed === 'number' && value.moveSpeed >= 1 && value.moveSpeed <= 10 ? value.moveSpeed : DEFAULT_SETTINGS.moveSpeed;
+  const keybinds = { ...DEFAULT_KEYBINDS, ...(value.keybinds && typeof value.keybinds === 'object' ? value.keybinds as Partial<Keybinds> : {}) };
+  const crosshair = typeof value.crosshair === 'number'
+    ? { ...DEFAULT_CROSSHAIR, size: value.crosshair }
+    : value.crosshair && typeof value.crosshair === 'object'
+      ? { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) }
+      : DEFAULT_CROSSHAIR;
+  return { sensitivity, crosshair, telemetryMode, weapon, moveSpeed, keybinds };
 }
 
 function CrosshairView({
@@ -1267,13 +1295,13 @@ function TrainingSetup({
         setStats({ ...next });
       };
       const onKeyDown = (event: KeyboardEvent) => {
-        const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'shift', 'c', ' '].includes(key)) {
-          keys.add(key);
+        const allowed = new Set(Object.values(settings.keybinds));
+        if (allowed.has(event.code)) {
+          keys.add(event.code);
           event.preventDefault();
         }
       };
-      const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); };
+      const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.code); };
       const onBlur = () => keys.clear();
       const onPointerDown = () => {
         if (statusRef.current === 'active') renderer.domElement.requestPointerLock?.();
@@ -1283,22 +1311,22 @@ function TrainingSetup({
         setPointerLocked(locked);
       };
       const onCanvasClick = (event: MouseEvent) => onShoot(event);
-      const runSpeed = 5.4;
-      const walkSpeed = 2.6;
-      const crouchSpeed = 2.1;
+      const runSpeed = settings.moveSpeed;
+      const walkSpeed = settings.moveSpeed * .55;
+      const crouchSpeed = settings.moveSpeed * .45;
       const standingEyeHeight = 1.62;
       const crouchingEyeHeight = 1.08;
       const gravity = 19.0;
       const jumpSpeed = 5.0;
       const applyMovement = (delta: number) => {
-        const horizontal = Number(keys.has('d')) - Number(keys.has('a'));
-        const forwardInput = Number(keys.has('w')) - Number(keys.has('s'));
+        const horizontal = Number(keys.has(settings.keybinds.right)) - Number(keys.has(settings.keybinds.left));
+        const forwardInput = Number(keys.has(settings.keybinds.forward)) - Number(keys.has(settings.keybinds.back));
         const input = new THREE.Vector3(horizontal, 0, forwardInput);
         if (input.lengthSq() > 1) input.normalize();
-        walkRef.current = keys.has('shift');
-        crouchRef.current = keys.has('c');
+        walkRef.current = keys.has(settings.keybinds.walk);
+        crouchRef.current = keys.has(settings.keybinds.crouch);
 
-        if (keys.has(' ') && groundedRef.current && !crouchRef.current) {
+        if (keys.has(settings.keybinds.jump) && groundedRef.current && !crouchRef.current) {
           jumpVelocityRef.current = jumpSpeed;
           groundedRef.current = false;
         }
@@ -2227,6 +2255,31 @@ function TrainingSetup({
             <div className="settings-subsection">
               <p className="eyebrow">CROSSHAIR</p>
               <strong>조준선 설정</strong>
+            </div>
+            <div className="settings-subsection">
+              <p className="eyebrow">WEAPON</p>
+              <strong>훈련 무기</strong>
+              <select className="settings-select" value={settings.weapon} onChange={(e) => onChange({ ...settings, weapon: e.target.value as WeaponId })}>
+                {Object.entries(WEAPONS).map(([id, weapon]) => <option key={id} value={id}>{weapon.name} · {weapon.type}</option>)}
+              </select>
+              <p className="settings-note">무기 수치는 훈련용 근사값이며 실제 게임과 완전히 동일하지 않습니다.</p>
+            </div>
+            <div className="settings-subsection">
+              <p className="eyebrow">MOVEMENT</p>
+              <strong>이동 설정</strong>
+              <label className="settings-inline">이동 속도 <input type="range" min="2" max="7" step=".1" value={settings.moveSpeed} onChange={(e) => onChange({ ...settings, moveSpeed: Number(e.target.value) })} /><output>{settings.moveSpeed.toFixed(1)}</output></label>
+              <div className="keybind-grid">
+                {([
+                  ['forward','앞','W'],['left','왼쪽','A'],['back','뒤','S'],['right','오른쪽','D'],
+                  ['crouch','앉기','C'],['walk','걷기','Shift'],['jump','점프','Space'],
+                ] as const).map(([key,label,placeholder]) => (
+                  <label className="keybind-item" key={key}>
+                    <span>{label}</span>
+                    <input value={settings.keybinds[key]} placeholder={placeholder} onChange={(e) => onChange({ ...settings, keybinds: { ...settings.keybinds, [key]: e.target.value || DEFAULT_KEYBINDS[key] } })} />
+                  </label>
+                ))}
+              </div>
+              <p className="settings-note">키 입력은 브라우저 KeyboardEvent.code 기준입니다. 기본값: W/A/S/D · C · Shift · Space</p>
             </div>
             <div className="settings-subsection telemetry-settings">
               <p className="eyebrow">RANGE TELEMETRY</p>
