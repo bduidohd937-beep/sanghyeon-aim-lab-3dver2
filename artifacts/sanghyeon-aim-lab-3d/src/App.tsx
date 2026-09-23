@@ -925,7 +925,7 @@ function TrainingSetup({
                     </div>
                     <div className="modal-actions">
                       <button className="secondary-button" onClick={() => setLaunchStep('count')}>← 이전</button>
-                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach, flickMode, flickBotCount); }}>훈련 시작 →</button>
+                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach); }}>훈련 시작 →</button>
                     </div>
                   </>
                 )}
