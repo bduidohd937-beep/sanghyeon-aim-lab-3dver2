@@ -2057,3 +2057,297 @@ function TrainingSetup({
             <div>
               <p className="eyebrow">SANGHYEON AIM LAB // {protocol} RESULT</p>
               <h1>{protocol} RESULT</h1>
+              <span className="result-difficulty">HEADLINE · NEWBIE</span>
+            </div>
+            <div className="result-score-hero"><strong>{sessionScore}</strong><span>/ 100</span><b>SESSION SCORE</b><em>{grade}</em></div>
+          </div>
+          <section className="result-primary-metrics">
+            <div><span>ACCURACY</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
+            <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>MAX COMBO</span><strong>{stats.maxStreak ?? stats.streak}</strong></div>
+          </section>
+          <section className="result-core">
+            <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
+            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
+            <div className="result-pattern-grid">
+              <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
+              <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
+              <div><b>{reactionGrade}</b><span>REACTION</span></div>
+              <div><b>{aimGrade}</b><span>AIM ACCURACY</span></div>
+            </div>
+          </section>
+          <section className="coaching-card">
+            <span>COACHING</span>
+            <p>{coaching}</p>
+          </section>
+          <div className="result-actions">
+            <button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button>
+            <button className="secondary-button" onClick={onHome}>훈련 선택으로</button>
+          </div>
+          <footer className="results-footer"><span>LAB</span><span>기록은 브라우저에 자동 저장됩니다</span></footer>
+        </div>
+      </div>
+    );
+  }
+  function GrowthPage({
+    history,
+    onBack,
+  }: {
+    history: HistoryItem[];
+    onBack: () => void;
+  }) {
+    const best = history.length
+      ? Math.max(...history.map((item) => item.score))
+      : 0;
+
+    const avg = history.length
+      ? Math.round(
+        history
+          .slice(0, 7)
+          .reduce((sum, item) => sum + item.score, 0) /
+        Math.min(7, history.length),
+      )
+      : 0;
+
+    const modules: Drill[] = [
+      'flick',
+      'tracking',
+      'braking',
+    ];
+
+    const moduleName = (type: Drill) => {
+      if (type === 'flick') return 'FLICK';
+      if (type === 'tracking') return 'TRACKING';
+      return 'BRAKING';
+    };
+
+    return (
+      <main className="tool-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>
+            AIM LAB
+          </button>
+
+          <div>
+            <p className="eyebrow">
+              PROGRESS DATABASE // DETAILED
+            </p>
+
+            <h1>성장 기록</h1>
+          </div>
+
+          <div className="game-help">
+            {history.length} SESSIONS
+          </div>
+        </header>
+
+        <section className="growth-overview panel">
+          <div>
+            <p className="eyebrow">
+              WHAT AM I IMPROVING?
+            </p>
+
+            <h2>점수 하나만 보지 않습니다.</h2>
+
+            <p>
+              모드별 최고 기록과 최근 기록을 비교해서
+              훈련 흐름과 성장 추이를 확인합니다.
+            </p>
+          </div>
+
+          <div className="growth-overview-stats">
+            <span>
+              <small>SESSIONS</small>
+              <b>{history.length}</b>
+            </span>
+
+            <span>
+              <small>BEST</small>
+              <b>{best || '--'}</b>
+            </span>
+
+            <span>
+              <small>LAST 7 AVG</small>
+              <b>{avg || '--'}</b>
+            </span>
+          </div>
+        </section>
+
+        <section className="growth-cards">
+          {modules.map((type) => {
+            const rows = history.filter(
+              (item) => item.drill === type,
+            );
+
+            const bestType = rows.length
+              ? Math.max(...rows.map((item) => item.score))
+              : 0;
+
+            const last = rows[0];
+
+            return (
+              <article
+                className={`growth-module panel ${type}`}
+                key={type}
+              >
+                <div className="growth-module-head">
+                  <span>{moduleName(type)}</span>
+                  <b>{rows.length}회</b>
+                </div>
+
+                <div className="growth-main">
+                  <strong>{bestType || '--'}</strong>
+                  <small>BEST SCORE</small>
+                </div>
+
+                <div className="growth-detail-grid">
+                  <div>
+                    <small>최근 점수</small>
+                    <b>{last?.score ?? '--'}</b>
+                  </div>
+
+                  <div>
+                    <small>최근 명중률</small>
+                    <b>
+                      {last
+                        ? `${last.accuracy.toFixed(1)}%`
+                        : '--'}
+                    </b>
+                  </div>
+
+                  <div>
+                    <small>최근 연속</small>
+                    <b>{last?.streak ?? '--'}</b>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+
+        <section className="growth-timeline panel">
+          {history.length ? (
+            history.map((record, index) => (
+              <div
+                className="growth-row"
+                key={`${record.date}-${record.score}-${index}`}
+              >
+                <time>{record.date}</time>
+
+                <b>{record.drill.toUpperCase()}</b>
+
+                <strong>{record.score}</strong>
+
+                <span>
+                  {record.accuracy.toFixed(1)}% ACC ·{' '}
+                  {record.hits ?? 0}/{record.shots ?? 0} HITS
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="empty">
+              아직 완료한 훈련 기록이 없습니다.
+            </div>
+          )}
+        </section>
+      </main>
+    );
+  }
+
+  function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+    return (
+      <main className="tool-page crosshair-page">
+        <header className="tool-header">
+          <button className="back-btn" onClick={onBack}>AIM LAB</button>
+          <div>
+            <p className="eyebrow">SETTINGS // GLOBAL</p>
+            <h1>설정</h1>
+          </div>
+          <div className="game-help">3D RANGE</div>
+        </header>
+        <section className="crosshair-config-shell panel">
+          <div className="crosshair-big-preview"><CrosshairView config={settings.crosshair} /></div>
+          <div className="crosshair-config-body">
+            <div className="preset-row">
+              {Object.entries(CROSSHAIR_PRESETS).map(([name, preset]) => (
+                <button key={name} className={`preset ${settings.crosshair.style === preset.style && settings.crosshair.size === preset.size ? 'selected' : ''}`} onClick={() => onChange({ ...settings, crosshair: { ...preset } })}>{name}</button>
+              ))}
+            </div>
+            <div className="crosshair-config-grid">
+              <label>색상<input type="color" value={settings.crosshair.color} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, color: e.target.value } })} /></label>
+              <label>크기<input type="range" min="18" max="60" value={settings.crosshair.size} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(e.target.value) } })} /></label>
+              <label>간격<input type="range" min="0" max="14" value={settings.crosshair.gap} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, gap: Number(e.target.value) } })} /></label>
+              <label>두께<input type="range" min="1" max="5" value={settings.crosshair.thickness} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, thickness: Number(e.target.value) } })} /></label>
+            </div>
+            <div className="crosshair-toggles">
+              <label><input type="checkbox" checked={settings.crosshair.outline} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, outline: e.target.checked } })} /> 외곽선</label>
+              <label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, centerDot: e.target.checked } })} /> 중앙 점</label>
+            </div>
+            <div className="settings-subsection">
+              <p className="eyebrow">CROSSHAIR</p>
+              <strong>조준선 설정</strong>
+            </div>
+            <div className="settings-subsection telemetry-settings">
+              <p className="eyebrow">RANGE TELEMETRY</p>
+              <strong>현재 프레임 / 발사 오차 표시</strong>
+              <div className="telemetry-mode-grid">
+                {([
+                  ['off', '표시안함'],
+                  ['text', '텍스트표시'],
+                  ['graph', '그래프보기'],
+                  ['both', '둘다보기'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} className={settings.telemetryMode === value ? 'selected' : ''} onClick={() => onChange({ ...settings, telemetryMode: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
+
+  function HomeRoute() {
+    const [view, setView] = useState<View>('home');
+    const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
+    const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
+    const [results, setResults] = useState<RunStats | null>(null);
+    useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
+    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
+    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
+    if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
+    if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
+    if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
+    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
+  }
+
+function Router() {
+  return (
+    <ErrorBoundary>
+      <Switch>
+        <Route path="/" component={HomeRoute} />
+        <Route component={NotFound} />
+      </Switch>
+    </ErrorBoundary>
+  );
+}
+
+function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+          <Router />
+        </WouterRouter>
+        <Toaster />
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+}
+
+export default App;
