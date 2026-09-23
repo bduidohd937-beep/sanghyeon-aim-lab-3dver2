@@ -1,15 +1,11 @@
 {
-  "name": "workspace",
-  "version": "0.0.0",
-  "license": "MIT",
-  "scripts": {
-    "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "typecheck:libs": "tsc --build",
-    "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
-  },
+  "name": "sanghyeon-aim-lab-3dver2",
+  "version": "1.0.0",
   "private": true,
-  "dependencies": {
-    "@replit/connectors-sdk": "^0.4.3"
+  "scripts": {
+    "build": "pnpm --filter @workspace/sanghyeon-aim-lab-3d run build",
+    "typecheck": "pnpm --filter @workspace/sanghyeon-aim-lab-3d run typecheck",
+    "dev": "pnpm --filter @workspace/sanghyeon-aim-lab-3d run dev"
   },
   "devDependencies": {
     "prettier": "^3.9.6",
