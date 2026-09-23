@@ -1275,6 +1275,9 @@ function TrainingSetup({
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); };
       const onBlur = () => keys.clear();
+      const onPointerDown = () => {
+        if (statusRef.current === 'active') renderer.domElement.requestPointerLock?.();
+      };
       const onPointerLockChange = () => {
         const locked = document.pointerLockElement === renderer.domElement;
         setPointerLocked(locked);
@@ -1341,6 +1344,7 @@ function TrainingSetup({
         renderer.setSize(mount.clientWidth, mount.clientHeight);
       };
       window.addEventListener('resize', resize);
+      renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
@@ -1464,7 +1468,7 @@ function TrainingSetup({
         aimCoachGuideRef.current = null;
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
-        cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
+        cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('pointerdown', onPointerDown); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
     }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode]);
 
     useEffect(() => {
