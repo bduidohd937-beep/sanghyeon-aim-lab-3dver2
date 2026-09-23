@@ -1149,15 +1149,14 @@ function TrainingSetup({
         pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
         camera.rotation.set(pitch, yaw, 0);
       };
-      let pointerLockBlockedUntil = 0;
       const requestPointerLockSafe = () => {
-        if (Date.now() < pointerLockBlockedUntil) return;
+        if (Date.now() < pointerLockBlockedUntilRef.current) return;
         if (document.pointerLockElement === renderer.domElement) return;
         try {
           const result = renderer.domElement.requestPointerLock?.();
           if (result && typeof (result as Promise<void>).catch === 'function') {
             void (result as Promise<void>).catch(() => {
-              pointerLockBlockedUntil = Date.now() + 500;
+              pointerLockBlockedUntilRef.current = Date.now() + 500;
             });
           }
         } catch {}
@@ -1532,7 +1531,7 @@ function TrainingSetup({
       setStatus(next);
     };
     const exit = () => {
-      pointerLockBlockedUntil = Date.now() + 700;
+      pointerLockBlockedUntilRef.current = Date.now() + 700;
       if (document.pointerLockElement) document.exitPointerLock();
       finish();
     };
