@@ -2340,7 +2340,7 @@ function TrainingSetup({
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string) => { setConfig({ drill, duration, difficulty }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
-    if (view === 'home') return <><Home settings={settings} onSettings={() => setSettingsOpen(true)} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} />{settingsOpen && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}</>;
+    if (view === 'home') return <><Home settings={settings} onSettings={() => setSettingsOpen(true)} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => start(drill, 30, 'operator')} />{settingsOpen && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}</>;
     if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
