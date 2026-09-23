@@ -930,7 +930,6 @@ function TrainingSetup({
                 difficulty,
                 feedbackEnabled,
                 aimCoach,
-                flickBotCount,
               )
             }
           >
