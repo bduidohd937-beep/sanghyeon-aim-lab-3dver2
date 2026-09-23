@@ -488,12 +488,6 @@ function Home({
       <header className="app-header">
         <Brand />
 
-        <nav className="main-nav">
-          <button onClick={() => onNavigate('sensitivity')}>🎯 감도 설정</button>
-          <button onClick={() => onNavigate('growth')}>📊 연습 기록</button>
-          <button onClick={() => onNavigate('crosshair')}>⚙️ 설정</button>
-        </nav>
-
         <div className="header-meta">
           <span>
             <span
