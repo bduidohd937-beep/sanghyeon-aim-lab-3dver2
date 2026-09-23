@@ -1515,7 +1515,7 @@ function TrainingSetup({
         aimCoachGuideRef.current = null;
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
-        cancelAnimationFrame(frame); document.removeEventListener('mousemove', onPointerMove); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); document.removeEventListener('mousedown', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
+        cancelAnimationFrame(frame); document.removeEventListener('mousemove', onPointerMove); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); document.removeEventListener('mousedown', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); renderer.dispose(); if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement); };
     }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode]);
 
     useEffect(() => {
@@ -1529,7 +1529,7 @@ function TrainingSetup({
     }, [finish]);
     const togglePause = () => {
       const next = statusRef.current === 'active' ? 'paused' : 'active';
-      if (next === 'paused' && document.pointerLockElement) document.exitPointerLock();
+      if (next === 'paused') setPointerLocked(false);
       statusRef.current = next;
       setStatus(next);
     };
