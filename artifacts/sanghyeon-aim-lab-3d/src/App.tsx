@@ -960,6 +960,7 @@ function TrainingSetup({
     const targetSpawnAtRef = useRef(performance.now());
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
     const targetRootRef = useRef<THREE.Group | null>(null);
+    const aimCoachGuideRef = useRef<THREE.Line | null>(null);
     const brakingMovedRef = useRef(false);
     const sensitivityRef = useRef(settings.sensitivity);
     const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'hell' ? 0.25 : difficulty === 'elite' ? 0.31 : 0.42;
@@ -994,6 +995,16 @@ function TrainingSetup({
       const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
       const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
       const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
+      const aimGuideGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-12.5, 1.88, -6.83),
+        new THREE.Vector3(12.5, 1.88, -6.83),
+      ]);
+      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: .58, depthTest: false });
+      const aimGuide = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
+      aimGuide.visible = aimCoach;
+      aimGuide.renderOrder = 20;
+      scene.add(aimGuide);
+      aimCoachGuideRef.current = aimGuide;
       const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
       const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
       const group = new THREE.Group(); scene.add(group);
@@ -1478,23 +1489,42 @@ function TrainingSetup({
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
           if (aimCoach) {
-            const lookDirection = new THREE.Vector3();
-            camera.getWorldDirection(lookDirection);
-            const referenceZ = -6.82;
-            const headLineY = 1.65;
-            const distance = referenceZ - camera.position.z;
-            const projectedY = Math.abs(lookDirection.z) > 0.001
-              ? camera.position.y + lookDirection.y * (distance / -lookDirection.z)
-              : camera.position.y;
-            const verticalError = projectedY - headLineY;
-            const tolerance = 0.08;
-            const nextAimState: 'low' | 'high' | 'ok' =
-              verticalError < -tolerance ? 'low' : verticalError > tolerance ? 'high' : 'ok';
-            setAimCoachState(nextAimState);
-            setAimCoachWarning(nextAimState !== 'ok');
-          } else if (aimCoachState !== 'ok') {
+            const target = targetMeshRef.current;
+            if (target) {
+              const box = new THREE.Box3().setFromObject(target);
+              const center = box.getCenter(new THREE.Vector3());
+              const top = new THREE.Vector3(center.x, box.max.y, center.z).project(camera);
+              const bottom = new THREE.Vector3(center.x, box.min.y, center.z).project(camera);
+              const screenHeight = renderer.domElement.clientHeight;
+              const headTopPx = (1 - top.y) * .5 * screenHeight;
+              const headBottomPx = (1 - bottom.y) * .5 * screenHeight;
+              const headMinPx = Math.min(headTopPx, headBottomPx);
+              const headMaxPx = Math.max(headTopPx, headBottomPx);
+              const crosshairY = screenHeight * .5;
+              const pixelPadding = 2;
+              const nextAimState: 'low' | 'high' | 'ok' =
+                crosshairY < headMinPx - pixelPadding
+                  ? 'high'
+                  : crosshairY > headMaxPx + pixelPadding
+                    ? 'low'
+                    : 'ok';
+              setAimCoachState(nextAimState);
+              setAimCoachWarning(nextAimState !== 'ok');
+              const headWorld = target.getWorldPosition(new THREE.Vector3());
+              const guidePosition = aimGuide.geometry.getAttribute('position');
+              guidePosition.setY(0, headWorld.y);
+              guidePosition.setY(1, headWorld.y);
+              guidePosition.needsUpdate = true;
+              aimGuide.visible = true;
+            } else {
+              setAimCoachState('ok');
+              setAimCoachWarning(false);
+              aimGuide.visible = false;
+            }
+          } else {
             setAimCoachState('ok');
             setAimCoachWarning(false);
+            aimGuide.visible = false;
           }
           if (drill === 'tracking' && targetRootRef.current) {
             // Valorant-style strafing: the bot stays grounded and moves in
@@ -1534,7 +1564,11 @@ function TrainingSetup({
         renderer.render(scene, camera);
       };
       frame = requestAnimationFrame(animate);
-      return () => { cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
+      return () => {
+        aimCoachGuideRef.current = null;
+        aimGuideGeometry.dispose();
+        aimGuideMaterial.dispose();
+        cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
     }, [difficulty, drill, finish, difficultySize]);
 
     useEffect(() => {
