@@ -15,6 +15,7 @@ type TrainingConfig = {
   difficulty: string;
   feedbackEnabled: boolean;
   aimCoach: boolean;
+  flickBotCount: number;
 };
 type View =
   | 'home'
@@ -450,7 +451,7 @@ function Home({
 }: {
   settings: Settings;
   onSettings: () => void;
-  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean) => void;
+  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean, flickBotCount?: number) => void;
   history: HistoryItem[];
   onNavigate: (view: View) => void;
   onSettingsChange: (next: Settings) => void;
@@ -701,6 +702,7 @@ function TrainingSetup({
   const [duration, setDuration] = useState(30);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [aimCoach, setAimCoach] = useState(false);
+  const [flickBotCount, setFlickBotCount] = useState(3);
 
   const drillInfo = {
     flick: {
@@ -834,7 +836,7 @@ function TrainingSetup({
             <button type="button" className={`mode-option ${aimCoach ? 'selected' : ''}`} onClick={() => setAimCoach((value) => !value)}>
               <div>
                 <strong>📐 에임 높이 교정</strong>
-                <span>머리 높이 가이드 + 시선이 너무 낮을 때 알림</span>
+                <span>훈련봇 머리 높이를 기준으로 조준을 교정합니다</span>
               </div>
               <span className="option-on">{aimCoach ? 'ON' : 'OFF'}</span>
             </button>
@@ -843,41 +845,42 @@ function TrainingSetup({
               <div>
                 <strong>📍 랜덤 위치 생성</strong>
                 <span>
-                  매 타겟마다 서로 다른 위치에 생성
+                  구형 타겟만 생성 · 로봇은 벽 안쪽 바닥에 배치
                 </span>
               </div>
-
               <span className="option-on">ON</span>
             </div>
 
             <div className="mode-option">
               <div>
-                <strong>🎯 헤드라인</strong>
+                <strong>🤖 로봇 타겟 생성</strong>
                 <span>
-                  발로란트 기준 머리 높이에 타겟 배치
+                  훈련봇 헤드 히트박스를 실제 조준 타겟으로 사용
                 </span>
               </div>
-
               <span className="option-on">ON</span>
             </div>
 
-            <div className="mode-option">
-              <div>
-                <strong>
-                  {drill === 'tracking'
-                    ? '🤖 훈련 봇 이동'
-                    : '🤖 훈련 봇 생성'}
-                </strong>
-
-                <span>
-                  {drill === 'tracking'
-                    ? '발로란트식 좌우 스트레이핑'
-                    : '실전형 훈련 봇을 생성합니다'}
-                </span>
+            {drill === 'flick' && (
+              <div className="mode-option">
+                <div>
+                  <strong>🤖 플릭 훈련봇 동시 소환</strong>
+                  <span>벽을 넘지 않는 범위에서 바닥에 붙은 위치로 랜덤 배치</span>
+                </div>
+                <div className="bot-count-options">
+                  {[1, 3, 5, 8].map((count) => (
+                    <button
+                      key={count}
+                      type="button"
+                      className={flickBotCount === count ? 'selected' : ''}
+                      onClick={() => setFlickBotCount(count)}
+                    >
+                      {count}
+                    </button>
+                  ))}
+                </div>
               </div>
-
-              <span className="option-on">ON</span>
-            </div>
+            )}
 
           </div>
         </section>
@@ -927,6 +930,7 @@ function TrainingSetup({
                 difficulty,
                 feedbackEnabled,
                 aimCoach,
+                flickBotCount,
               )
             }
           >
@@ -940,7 +944,7 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
@@ -1110,25 +1114,9 @@ function TrainingSetup({
           emissiveIntensity: 0.2,
         });
 
-        if (drill === 'flick') {
-          const sphere = new THREE.Mesh(
-            new THREE.SphereGeometry(.30 * botScale, 24, 18),
-            redAccentMat
-          );
-          sphere.name = 'head';
-          sphere.position.set(
-            (Math.random() - .5) * 5.0,
-            1.65 + Math.random() * 1.6,
-            -7.5 - Math.random() * 2.0
-          );
-          sphere.castShadow = true;
-          root.add(sphere);
-          group.add(root);
-          targetRootRef.current = root;
-          targetMeshRef.current = sphere;
-          brakingMovedRef.current = false;
-          return;
-        }
+        // 모든 모드에서 동일한 로봇 타겟을 사용합니다.
+        // FLICK만 여러 대를 동시에 소환할 수 있으며, 각 로봇은 바닥에 붙은 채
+        // 좌우 벽과 후면 벽 안쪽의 랜덤 X/Z 위치에 생성됩니다.
 
         // VALORANT-style training bot model.
         const neck = new THREE.Mesh(
@@ -1285,15 +1273,21 @@ function TrainingSetup({
           calfR
         );
 
-        // Keep the robot head centered on the fixed world-space headline.
-        const robotRootY = HEADLINE_Y - head.position.y;
-        if (drill === 'braking') {
+        // FLICK: 바닥에 고정된 상태로 벽 안쪽 X/Z를 랜덤 배치.
+        // 로봇 발이 y=0에 닿도록 root.y는 0으로 둡니다.
+        if (drill === 'flick') {
+          const randomX = THREE.MathUtils.randFloat(-11.5, 11.5);
+          const randomZ = THREE.MathUtils.randFloat(-9.35, -2.0);
+          root.position.set(randomX, 0, randomZ);
+        } else if (drill === 'braking') {
+          const robotRootY = HEADLINE_Y - head.position.y;
           root.position.set(
             (Math.random() - .5) * 8.0,
             robotRootY,
             -8.0 - Math.random() * 1.5
           );
         } else {
+          const robotRootY = HEADLINE_Y - head.position.y;
           root.position.set(0, robotRootY, -9.0);
         }
 
@@ -1306,8 +1300,14 @@ function TrainingSetup({
         brakingMovedRef.current = false;
       };
 
-      // Spawn the first target when the range opens. Without this, the scene starts empty.
-      spawn();
+      // FLICK은 여러 로봇을 동시에 배치합니다. 나머지 모드는 1대만 생성합니다.
+      if (drill === 'flick') {
+        for (let i = 0; i < flickBotCount; i += 1) spawn();
+        targetRootRef.current = group;
+        targetMeshRef.current = null;
+      } else {
+        spawn();
+      }
 
       const raycaster = new THREE.Raycaster();
       const keys = new Set<string>();
@@ -1332,7 +1332,12 @@ function TrainingSetup({
           ? raycaster.intersectObject(targetRootRef.current, true)
           : [];
 
-        const headHit = intersections.some((item) => item.object === targetMeshRef.current);
+        const hitHead = intersections.find((item) =>
+          drill === 'flick'
+            ? item.object.name === 'head'
+            : item.object === targetMeshRef.current
+        );
+        const headHit = Boolean(hitHead);
         const bodyHit = intersections.length > 0 && !headHit;
         const reaction = performance.now() - targetSpawnAtRef.current;
         if (drill === 'flick' && Number.isFinite(reaction)) {
@@ -1413,7 +1418,14 @@ function TrainingSetup({
             id: Date.now(),
           });
 
-          spawn();
+          if (drill === 'flick' && hitHead?.object.parent) {
+            group.remove(hitHead.object.parent);
+            spawn();
+            targetRootRef.current = group;
+            targetMeshRef.current = null;
+          } else {
+            spawn();
+          }
         } else {
           next.streak = 0;
           next.score = Math.max(0, next.score - 20);
@@ -1579,7 +1591,7 @@ function TrainingSetup({
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
         cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
-    }, [difficulty, drill, finish, difficultySize]);
+    }, [difficulty, drill, finish, difficultySize, flickBotCount]);
 
     useEffect(() => {
       const timer = window.setInterval(() => {
@@ -2356,10 +2368,10 @@ function TrainingSetup({
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3 });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
-    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
+    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
