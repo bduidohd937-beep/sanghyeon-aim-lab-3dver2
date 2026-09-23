@@ -46,7 +46,7 @@ type  CrosshairConfig = {
 };
 type TelemetryMode = 'off' | 'text' | 'graph' | 'both';
 type Settings = { sensitivity: number; crosshair: CrosshairConfig; telemetryMode: TelemetryMode };
-type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number; avgReaction?: number; bestReaction?: number; overshoots?: number };
+type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number; avgReaction?: number; bestReaction?: number; overshoots?: number; maxStreak?: number };
 type HistoryItem = { score: number; accuracy: number; drill: Drill; date: string; hits?: number; shots?: number; streak?: number };
 
 const queryClient = new QueryClient();
@@ -942,7 +942,7 @@ function TrainingSetup({
 
   function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
-    const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0 });
+    const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
     const statusRef = useRef<RunStatus>('active');
     const [status, setStatus] = useState<RunStatus>('active');
@@ -1304,6 +1304,7 @@ function TrainingSetup({
         } else if (headHit && !brakingMoving) {
           next.hits += 1;
           next.streak += 1;
+          next.maxStreak = Math.max(next.maxStreak ?? 0, next.streak);
 
           const stopQuality =
             drill === 'braking'
@@ -1995,7 +1996,7 @@ function TrainingSetup({
             <div><span>ACCURACY</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
             <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
             <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
-            <div><span>MAX COMBO</span><strong>{stats.streak}</strong></div>
+            <div><span>MAX COMBO</span><strong>{stats.maxStreak ?? stats.streak}</strong></div>
           </section>
           <section className="result-core">
             <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
