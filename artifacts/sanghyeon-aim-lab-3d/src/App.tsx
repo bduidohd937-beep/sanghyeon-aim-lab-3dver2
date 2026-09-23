@@ -44,13 +44,14 @@ type  CrosshairConfig = {
   outline: boolean;
   centerDot: boolean;
 };
-type Settings = { sensitivity: number; crosshair: CrosshairConfig };
-type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number };
+type TelemetryMode = 'off' | 'text' | 'graph' | 'both';
+type Settings = { sensitivity: number; crosshair: CrosshairConfig; telemetryMode: TelemetryMode };
+type RunStats = { score: number; accuracy: number; streak: number; hits: number; shots: number; drill: Drill; duration: number; avgReaction?: number; bestReaction?: number; overshoots?: number };
 type HistoryItem = { score: number; accuracy: number; drill: Drill; date: string; hits?: number; shots?: number; streak?: number };
 
 const queryClient = new QueryClient();
 const DEFAULT_CROSSHAIR: CrosshairConfig = { style: 'classic', color: '#ffffff', size: 36, gap: 5, thickness: 2, outline: true, centerDot: false };
-const DEFAULT_SETTINGS: Settings = { sensitivity: 1.15, crosshair: DEFAULT_CROSSHAIR };
+const DEFAULT_SETTINGS: Settings = { sensitivity: 1.15, crosshair: DEFAULT_CROSSHAIR, telemetryMode: 'off' };
 
 const CROSSHAIR_PRESETS: Record<string, CrosshairConfig> = {
   'CLASSIC': {
@@ -149,11 +150,12 @@ function saveStorage(key: string, value: unknown) {
 
 function normalizeSettings(raw: unknown): Settings {
   if (!raw || typeof raw !== 'object') return DEFAULT_SETTINGS;
-  const value = raw as { sensitivity?: unknown; crosshair?: unknown };
+  const value = raw as { sensitivity?: unknown; crosshair?: unknown; telemetryMode?: unknown };
   const sensitivity = typeof value.sensitivity === 'number' ? value.sensitivity : DEFAULT_SETTINGS.sensitivity;
-  if (typeof value.crosshair === 'number') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, size: value.crosshair } };
-  if (value.crosshair && typeof value.crosshair === 'object') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) } };
-  return { sensitivity, crosshair: DEFAULT_CROSSHAIR };
+  const telemetryMode: TelemetryMode = value.telemetryMode === 'text' || value.telemetryMode === 'graph' || value.telemetryMode === 'both' ? value.telemetryMode : 'off';
+  if (typeof value.crosshair === 'number') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, size: value.crosshair }, telemetryMode };
+  if (value.crosshair && typeof value.crosshair === 'object') return { sensitivity, crosshair: { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) }, telemetryMode };
+  return { sensitivity, crosshair: DEFAULT_CROSSHAIR, telemetryMode };
 }
 
 function CrosshairView({
@@ -486,7 +488,7 @@ function Home({
         <nav className="main-nav">
           <button onClick={() => onNavigate('sensitivity')}>🎯 감도 설정</button>
           <button onClick={() => onNavigate('growth')}>📈 성장 기록</button>
-          <button onClick={() => onNavigate('crosshair')}>✚ 조준선 설정</button>
+          <button onClick={() => onNavigate('crosshair')}>⚙ 설정</button>
         </nav>
 
         <div className="header-meta">
@@ -940,7 +942,7 @@ function TrainingSetup({
 
   function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
-    const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration });
+    const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0 });
     const timeRef = useRef(duration);
     const statusRef = useRef<RunStatus>('active');
     const [status, setStatus] = useState<RunStatus>('active');
@@ -951,6 +953,10 @@ function TrainingSetup({
     const [pointerLocked, setPointerLocked] = useState(false);
     const [aimCoachWarning, setAimCoachWarning] = useState(false);
     const [aimCoachState, setAimCoachState] = useState<'low' | 'high' | 'ok'>('ok');
+    const [fps, setFps] = useState(0);
+    const [shotError, setShotError] = useState<number | null>(null);
+    const reactionSamplesRef = useRef<number[]>([]);
+    const targetSpawnAtRef = useRef(performance.now());
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
     const targetRootRef = useRef<THREE.Group | null>(null);
     const brakingMovedRef = useRef(false);
@@ -959,7 +965,8 @@ function TrainingSetup({
     const finish = useCallback(() => {
       if (statusRef.current === 'done') return;
       statusRef.current = 'done';
-      const current = { ...statsRef.current, accuracy: statsRef.current.shots ? statsRef.current.hits / statsRef.current.shots * 100 : 0 };
+      const samples = reactionSamplesRef.current;
+      const current = { ...statsRef.current, accuracy: statsRef.current.shots ? statsRef.current.hits / statsRef.current.shots * 100 : 0, avgReaction: samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : undefined, bestReaction: samples.length ? Math.min(...samples) : undefined };
       statsRef.current = current;
       setStats(current);
       onFinish(current);
@@ -1068,6 +1075,7 @@ function TrainingSetup({
 
       const brakingStopThreshold = .16;
       const spawn = () => {
+        targetSpawnAtRef.current = performance.now();
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
 
@@ -1226,13 +1234,6 @@ function TrainingSetup({
       const raycaster = new THREE.Raycaster();
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
-      const syncPointerToAim = () => {
-        if (document.pointerLockElement !== renderer.domElement) return;
-        const rect = renderer.domElement.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        window.dispatchEvent(new MouseEvent('mousemove', { clientX: centerX, clientY: centerY, bubbles: true }));
-      };
       const onPointerMove = (event: PointerEvent) => {
         if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
         const lookScale = .0016 * sensitivityRef.current;
@@ -1243,7 +1244,10 @@ function TrainingSetup({
       const onShoot = (event: MouseEvent) => {
         if (statusRef.current !== 'active') return;
         event.preventDefault();
-        if (document.pointerLockElement !== renderer.domElement) renderer.domElement.requestPointerLock?.();
+        if (document.pointerLockElement !== renderer.domElement) {
+          renderer.domElement.requestPointerLock?.();
+          return;
+        }
 
         raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
         const intersections = targetRootRef.current
@@ -1252,10 +1256,24 @@ function TrainingSetup({
 
         const headHit = intersections.some((item) => item.object === targetMeshRef.current);
         const bodyHit = intersections.length > 0 && !headHit;
+        const reaction = performance.now() - targetSpawnAtRef.current;
+        if (drill === 'flick' && Number.isFinite(reaction)) {
+          reactionSamplesRef.current.push(reaction);
+          if (reactionSamplesRef.current.length > 100) reactionSamplesRef.current.shift();
+        }
+        if (targetRootRef.current) {
+          const targetCenter = new THREE.Vector3();
+          targetRootRef.current.getWorldPosition(targetCenter);
+          const aimDirection = camera.getWorldDirection(new THREE.Vector3());
+          const targetDirection = targetCenter.sub(camera.position).normalize();
+          const error = THREE.MathUtils.radToDeg(aimDirection.angleTo(targetDirection));
+          setShotError(error);
+        }
 
         const next = {
           ...statsRef.current,
           shots: statsRef.current.shots + 1,
+          overshoots: statsRef.current.overshoots ?? 0,
         };
 
         const brakingMoving =
@@ -1275,6 +1293,7 @@ function TrainingSetup({
 
         if (drill === 'braking' && brakingNoMovement) {
           next.streak = 0;
+          next.overshoots = (next.overshoots ?? 0) + 1;
           next.score = Math.max(0, next.score - 20);
 
           if (feedbackEnabled) setFeedback({
@@ -1367,12 +1386,6 @@ function TrainingSetup({
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
         camera.position.y = 1.6;
       };
-      const lockOnStart = async () => {
-        try {
-          await renderer.domElement.requestPointerLock?.();
-        } catch {}
-      };
-      window.setTimeout(lockOnStart, 80);
       renderer.domElement.addEventListener('pointermove', onPointerMove); renderer.domElement.addEventListener('click', onCanvasClick); document.addEventListener('pointerlockchange', onPointerLockChange); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('blur', onBlur);
       const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
       window.addEventListener('resize', resize);
@@ -1382,10 +1395,17 @@ function TrainingSetup({
         timer: .35 + Math.random() * .45,
       };
       let frame = 0; let previous = performance.now();
+      let fpsFrames = 0; let fpsStarted = performance.now();
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
         const delta = Math.min((now - previous) / 1000, .05);
         previous = now;
+        fpsFrames += 1;
+        if (now - fpsStarted >= 500) {
+          setFps(Math.round(fpsFrames * 1000 / (now - fpsStarted)));
+          fpsFrames = 0;
+          fpsStarted = now;
+        }
         if (statusRef.current === 'active') {
           applyMovement(delta);
           recoilKick = THREE.MathUtils.damp(recoilKick, 0, 14, delta);
@@ -1403,7 +1423,7 @@ function TrainingSetup({
               ? camera.position.y + lookDirection.y * (distance / -lookDirection.z)
               : camera.position.y;
             const nextAimState: 'low' | 'high' | 'ok' =
-              projectedY < 1.28 ? 'low' : projectedY > 1.88 ? 'high' : 'ok';
+              projectedY < 1.45 ? 'low' : projectedY > 1.82 ? 'high' : 'ok';
             if (nextAimState !== aimCoachState) {
               setAimCoachState(nextAimState);
               setAimCoachWarning(nextAimState !== 'ok');
@@ -1572,7 +1592,7 @@ function TrainingSetup({
           {aimCoach && (
             <>
               <div className="aim-coach-guide"><span>HEAD LEVEL</span></div>
-              {aimCoachWarning && <div className="aim-coach-warning">↑ 시선을 조금 올려주세요</div>}
+              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↑ 시선을 조금 올려주세요' : '↓ 에임이 너무 높습니다'}</div>}
             </>
           )}
 
@@ -1599,6 +1619,29 @@ function TrainingSetup({
           {!pointerLocked && status === 'active' && (
             <div className="pointer-lock-hint">
               클릭하여 시점 고정 · 조준 시작
+            </div>
+          )}
+
+          {settings.telemetryMode !== 'off' && (
+            <div className="range-telemetry">
+              {(settings.telemetryMode === 'text' || settings.telemetryMode === 'both') && (
+                <div className="telemetry-text">
+                  <span>FPS <b>{fps || '--'}</b></span>
+                  <span>발사 오차 <b>{shotError === null ? '--' : `${shotError.toFixed(2)}°`}</b></span>
+                </div>
+              )}
+              {(settings.telemetryMode === 'graph' || settings.telemetryMode === 'both') && (
+                <div className="telemetry-graph">
+                  <span className="telemetry-graph-title">SHOT ERROR</span>
+                  <div className="telemetry-bars">
+                    {[...Array(18)].map((_, i) => {
+                      const value = shotError === null ? 0 : Math.min(100, shotError * 12 + ((i * 7) % 11));
+                      return <i key={i} style={{ height: `${Math.max(6, value)}%` }} />;
+                    })}
+                  </div>
+                  <small>실시간 발사 오차</small>
+                </div>
+              )}
             </div>
           )}
 
@@ -1925,33 +1968,54 @@ function TrainingSetup({
   }
   function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
     const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
-    const performance = Math.max(0, Math.min(100, Math.round(stats.accuracy)));
+    const reaction = stats.avgReaction ?? 0;
+    const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 250) / 8)) : stats.accuracy;
+    const sessionScore = Math.max(0, Math.min(100, Math.round(stats.accuracy * .72 + reactionScore * .28)));
+    const grade = sessionScore >= 90 ? 'A' : sessionScore >= 80 ? 'B+' : sessionScore >= 70 ? 'B' : sessionScore >= 60 ? 'C' : 'D';
+    const aimGrade = stats.accuracy >= 90 ? 'GOOD' : stats.accuracy >= 75 ? 'FAIR' : 'POOR';
+    const reactionGrade = !reaction ? '--' : reaction <= 450 ? 'GOOD' : 'POOR';
+    const weakest = (stats.overshoots ?? 0) >= Math.max(2, Math.ceil(stats.shots * .12)) ? 'CHAOS' : 'PRECISION';
+    const strongest = stats.accuracy >= 90 ? 'LONG' : 'CLEAN';
+    const coaching = weakest === 'CHAOS'
+      ? `CHAOS 패턴에서 ${stats.hits}/${stats.shots} 적중. 다음 세션은 이 패턴의 첫 이동을 더 작고 빠르게 가져가.`
+      : `명중률 ${stats.accuracy.toFixed(1)}%. 다음 세션은 첫 조준을 더 안정적으로 가져가.`;
     return (
       <div className="aim-app results-screen">
-        <div className="results-shell classic-results">
-          <div className="results-top"><Brand /><div className="results-kicker">TRAINING COMPLETE / {protocol}</div></div>
-          <div className="classic-results-head">
-            <p className="eyebrow">SANGHYEON AIM LAB // RESULT</p>
-            <h1>{protocol}<span> RESULTS</span></h1>
-            <p>이번 훈련의 조준 성능을 백분율로 확인하세요.</p>
+        <div className="results-shell modern-results">
+          <div className="results-top"><Brand /><div className="results-kicker">FLICK RESULT</div></div>
+          <div className="result-identity">
+            <div>
+              <p className="eyebrow">SANGHYEON AIM LAB // {protocol} RESULT</p>
+              <h1>{protocol} RESULT</h1>
+              <span className="result-difficulty">HEADLINE · NEWBIE</span>
+            </div>
+            <div className="result-score-hero"><strong>{sessionScore}</strong><span>/ 100</span><b>SESSION SCORE</b><em>{grade}</em></div>
           </div>
-          <section className="percentage-score-card">
-            <span>종합 점수</span>
-            <strong>{performance}<small>%</small></strong>
-            <div className="percentage-bar"><i style={{ width: `${performance}%` }} /></div>
-            <em>{stats.hits} HIT / {stats.shots} SHOT</em>
+          <section className="result-primary-metrics">
+            <div><span>ACCURACY</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
+            <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
+            <div><span>MAX COMBO</span><strong>{stats.streak}</strong></div>
           </section>
-          <section className="result-metric-grid">
-            <div><span>명중률</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
-            <div><span>최고 연속</span><strong>{stats.streak}</strong></div>
-            <div><span>점수</span><strong>{stats.score.toLocaleString()}</strong></div>
-            <div><span>훈련 시간</span><strong>{stats.duration}초</strong></div>
+          <section className="result-core">
+            <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
+            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
+            <div className="result-pattern-grid">
+              <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
+              <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
+              <div><b>{reactionGrade}</b><span>REACTION</span></div>
+              <div><b>{aimGrade}</b><span>AIM ACCURACY</span></div>
+            </div>
+          </section>
+          <section className="coaching-card">
+            <span>COACHING</span>
+            <p>{coaching}</p>
           </section>
           <div className="result-actions">
             <button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button>
             <button className="secondary-button" onClick={onHome}>훈련 선택으로</button>
           </div>
-          <footer className="results-footer"><span>기록은 브라우저에 자동 저장됩니다</span><span>Sanghyeon / 3D Aim Lab</span></footer>
+          <footer className="results-footer"><span>LAB</span><span>기록은 브라우저에 자동 저장됩니다</span></footer>
         </div>
       </div>
     );
@@ -2121,14 +2185,14 @@ function TrainingSetup({
     );
   }
 
-  function CrosshairPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+  function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
     return (
       <main className="tool-page crosshair-page">
         <header className="tool-header">
           <button className="back-btn" onClick={onBack}>AIM LAB</button>
           <div>
-            <p className="eyebrow">CROSSHAIR CONFIG // GLOBAL</p>
-            <h1>조준선 설정</h1>
+            <p className="eyebrow">SETTINGS // GLOBAL</p>
+            <h1>설정</h1>
           </div>
           <div className="game-help">3D RANGE</div>
         </header>
@@ -2150,6 +2214,24 @@ function TrainingSetup({
               <label><input type="checkbox" checked={settings.crosshair.outline} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, outline: e.target.checked } })} /> 외곽선</label>
               <label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, centerDot: e.target.checked } })} /> 중앙 점</label>
             </div>
+            <div className="settings-subsection">
+              <p className="eyebrow">CROSSHAIR</p>
+              <strong>조준선 설정</strong>
+            </div>
+            <div className="settings-subsection telemetry-settings">
+              <p className="eyebrow">RANGE TELEMETRY</p>
+              <strong>현재 프레임 / 발사 오차 표시</strong>
+              <div className="telemetry-mode-grid">
+                {([
+                  ['off', '표시안함'],
+                  ['text', '텍스트표시'],
+                  ['graph', '그래프보기'],
+                  ['both', '둘다보기'],
+                ] as const).map(([value, label]) => (
+                  <button key={value} className={settings.telemetryMode === value ? 'selected' : ''} onClick={() => onChange({ ...settings, telemetryMode: value })}>{label}</button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
       </main>
@@ -2170,7 +2252,7 @@ function TrainingSetup({
     if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
-    if (view === 'crosshair') return <CrosshairPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
   }
 
