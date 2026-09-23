@@ -15,7 +15,6 @@ type TrainingConfig = {
   difficulty: string;
   feedbackEnabled: boolean;
   aimCoach: boolean;
-  flickBotCount: number;
 };
 type View =
   | 'home'
@@ -702,7 +701,6 @@ function TrainingSetup({
   const [duration, setDuration] = useState(30);
   const [feedbackEnabled, setFeedbackEnabled] = useState(true);
   const [aimCoach, setAimCoach] = useState(false);
-  const [flickBotCount, setFlickBotCount] = useState(3);
 
   const drillInfo = {
     flick: {
@@ -930,7 +928,6 @@ function TrainingSetup({
                 difficulty,
                 feedbackEnabled,
                 aimCoach,
-                flickBotCount,
               )
             }
           >
@@ -1591,7 +1588,7 @@ function TrainingSetup({
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
         cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount]);
+    }, [difficulty, drill, finish, difficultySize]);
 
     useEffect(() => {
       const timer = window.setInterval(() => {
@@ -2368,7 +2365,7 @@ function TrainingSetup({
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3 });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount }); setView('range'); };
