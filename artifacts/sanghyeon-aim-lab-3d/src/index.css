@@ -1183,3 +1183,9 @@ body {
   .result-hit-line{flex-wrap:wrap}
   .result-hit-line b{margin-left:0}
 }
+
+.telemetry-bars{position:relative;display:flex;align-items:flex-end;gap:3px;min-height:48px;padding:6px 4px 4px;border-bottom:1px solid rgba(163,255,39,.22)}
+.telemetry-bars i{display:block;width:4px;min-height:3px;border-radius:2px 2px 0 0}
+.telemetry-idle-dot{height:2px!important;min-height:2px!important;background:rgba(255,255,255,.28);border-radius:50%!important;align-self:flex-end}
+.telemetry-stable-bar{background:rgba(163,255,39,.55);box-shadow:0 0 6px rgba(163,255,39,.18)}
+.telemetry-error-bar{background:#ff6b73;box-shadow:0 0 7px rgba(255,107,115,.28)}
