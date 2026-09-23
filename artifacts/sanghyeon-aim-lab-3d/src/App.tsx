@@ -609,7 +609,7 @@ function Home({
               <b>→</b>
             </button>
           </div>
-        </aside></aside>
+        </aside>
       </div>
     </div>
   );
