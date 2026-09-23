@@ -1344,7 +1344,11 @@ function TrainingSetup({
         renderer.setSize(mount.clientWidth, mount.clientHeight);
       };
       window.addEventListener('resize', resize);
-      renderer.domElement.addEventListener('pointerdown', onPointerDown);
+      document.addEventListener('mousemove', onPointerMove);
+      document.addEventListener('keydown', onKeyDown);
+      document.addEventListener('keyup', onKeyUp);
+      document.addEventListener('mousedown', onCanvasClick);
+      document.addEventListener('pointerlockchange', onPointerLockChange);
 
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
@@ -1468,7 +1472,7 @@ function TrainingSetup({
         aimCoachGuideRef.current = null;
         aimGuideGeometry.dispose();
         aimGuideMaterial.dispose();
-        cancelAnimationFrame(frame); renderer.domElement.removeEventListener('pointermove', onPointerMove); renderer.domElement.removeEventListener('pointerdown', onPointerDown); renderer.domElement.removeEventListener('click', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
+        cancelAnimationFrame(frame); document.removeEventListener('mousemove', onPointerMove); document.removeEventListener('keydown', onKeyDown); document.removeEventListener('keyup', onKeyUp); document.removeEventListener('mousedown', onCanvasClick); document.removeEventListener('pointerlockchange', onPointerLockChange); window.removeEventListener('blur', onBlur); window.removeEventListener('resize', resize); if (document.pointerLockElement === renderer.domElement) document.exitPointerLock(); renderer.dispose(); mount.removeChild(renderer.domElement); };
     }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode]);
 
     useEffect(() => {
