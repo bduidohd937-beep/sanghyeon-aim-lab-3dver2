@@ -9,6 +9,13 @@ import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, 
 import * as THREE from 'three';
 
 type Drill = 'flick' | 'tracking' | 'braking';
+type TrainingConfig = {
+  drill: Drill;
+  duration: number;
+  difficulty: string;
+  feedbackEnabled: boolean;
+  aimCoach: boolean;
+};
 type View =
   | 'home'
   | 'setup'
@@ -440,7 +447,7 @@ function Home({
 }: {
   settings: Settings;
   onSettings: () => void;
-  onStart: (drill: Drill, duration: number, difficulty: string) => void;
+  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean) => void;
   history: HistoryItem[];
   onNavigate: (view: View) => void;
   onSettingsChange: (next: Settings) => void;
@@ -896,6 +903,8 @@ function TrainingSetup({
 }) {
   const [difficulty, setDifficulty] = useState('operator');
   const [duration, setDuration] = useState(30);
+  const [feedbackEnabled, setFeedbackEnabled] = useState(true);
+  const [aimCoach, setAimCoach] = useState(false);
 
   const drillInfo = {
     flick: {
@@ -1018,6 +1027,22 @@ function TrainingSetup({
 
           <div className="mode-options">
 
+            <button type="button" className={`mode-option ${feedbackEnabled ? 'selected' : ''}`} onClick={() => setFeedbackEnabled((value) => !value)}>
+              <div>
+                <strong>💬 전투 피드백</strong>
+                <span>명중·미스 점수를 화면에 표시합니다</span>
+              </div>
+              <span className="option-on">{feedbackEnabled ? 'ON' : 'OFF'}</span>
+            </button>
+
+            <button type="button" className={`mode-option ${aimCoach ? 'selected' : ''}`} onClick={() => setAimCoach((value) => !value)}>
+              <div>
+                <strong>📐 에임 높이 교정</strong>
+                <span>머리 높이 가이드 + 시선이 너무 낮을 때 알림</span>
+              </div>
+              <span className="option-on">{aimCoach ? 'ON' : 'OFF'}</span>
+            </button>
+
             <div className="mode-option">
               <div>
                 <strong>📍 랜덤 위치 생성</strong>
@@ -1104,6 +1129,8 @@ function TrainingSetup({
                 drill,
                 duration,
                 difficulty,
+                feedbackEnabled,
+                aimCoach,
               )
             }
           >
@@ -1117,7 +1144,7 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration });
     const timeRef = useRef(duration);
@@ -1128,11 +1155,12 @@ function TrainingSetup({
     const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [pointerLocked, setPointerLocked] = useState(false);
+    const [aimCoachWarning, setAimCoachWarning] = useState(false);
     const targetMeshRef = useRef<THREE.Mesh | null>(null);
     const targetRootRef = useRef<THREE.Group | null>(null);
     const brakingMovedRef = useRef(false);
     const sensitivityRef = useRef(settings.sensitivity);
-    const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'elite' ? 0.31 : 0.42;
+    const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'hell' ? 0.25 : difficulty === 'elite' ? 0.31 : 0.42;
     const finish = useCallback(() => {
       if (statusRef.current === 'done') return;
       statusRef.current = 'done';
@@ -1166,6 +1194,15 @@ function TrainingSetup({
       const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
       const rangeLights = [-8, -4, 0, 4, 8].map((x) => { const lamp = new THREE.Mesh(new THREE.BoxGeometry(1.6, .04, .04), new THREE.MeshBasicMaterial({ color: '#a3ff27' })); lamp.position.set(x, 6.6, -6.7); scene.add(lamp); return lamp; }); void rangeLights;
       const group = new THREE.Group(); scene.add(group);
+
+      const aimGuideGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-6.5, 1.72, -6.82),
+        new THREE.Vector3(6.5, 1.72, -6.82),
+      ]);
+      const aimGuideMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: 0.32 });
+      const aimGuideLine = new THREE.Line(aimGuideGeometry, aimGuideMaterial);
+      aimGuideLine.visible = aimCoach;
+      scene.add(aimGuideLine);
 
       // Simple first-person rifle model: intentionally low-poly so it stays lightweight in-browser.
       const weapon = new THREE.Group();
@@ -1236,12 +1273,13 @@ function TrainingSetup({
 
       const brakingStopThreshold = .16;
       const brakingTargetY = 2.25;
+      let aimCoachLow = false;
       const brakingTargetZ = -4.2;
       const spawn = () => {
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
 
-        const botScale = difficulty === 'trainee' ? 1.12 : difficulty === 'elite' ? .78 : .94;
+        const botScale = difficulty === 'trainee' ? 1.12 : difficulty === 'hell' ? .70 : difficulty === 'elite' ? .78 : .94;
         const bodyMaterial = new THREE.MeshStandardMaterial({
           color: '#667277', emissive: '#182125', emissiveIntensity: .22,
           metalness: .15, roughness: .72
@@ -1440,7 +1478,7 @@ function TrainingSetup({
           next.streak = 0;
           next.score = Math.max(0, next.score - 20);
 
-          setFeedback({
+          if (feedbackEnabled) setFeedback({
             text: '이동 중 발사 -20',
             miss: true,
             id: Date.now(),
@@ -1458,16 +1496,18 @@ function TrainingSetup({
             100 *
             (1 + Math.min(next.streak, 15) * .08) *
             (1 + stopQuality * .5) *
-            (difficulty === 'elite'
-              ? 1.35
-              : difficulty === 'trainee'
+            (difficulty === 'hell'
+              ? 1.55
+              : difficulty === 'elite'
+                ? 1.35
+                : difficulty === 'trainee'
                 ? .8
                 : 1)
           );
 
           next.score += points;
 
-          setFeedback({
+          if (feedbackEnabled) setFeedback({
             text:
               drill === 'braking'
                 ? `브레이킹 + 헤드샷 +${points}`
@@ -1481,7 +1521,7 @@ function TrainingSetup({
           next.streak = 0;
           next.score = Math.max(0, next.score - 20);
 
-          setFeedback({
+          if (feedbackEnabled) setFeedback({
             text: brakingMoving
               ? '이동 중 발사 -20'
               : bodyHit
@@ -1545,11 +1585,21 @@ function TrainingSetup({
           weapon.position.y = baseWeaponY + recoilKick * .32;
           weapon.rotation.x = -.03 + recoilKick * 1.7;
           weapon.rotation.z = -.02 + recoilRoll;
+          if (aimCoach) {
+            const low = pitch < -0.38;
+            if (low !== aimCoachLow) {
+              aimCoachLow = low;
+              setAimCoachWarning(low);
+            }
+          } else if (aimCoachLow) {
+            aimCoachLow = false;
+            setAimCoachWarning(false);
+          }
           if (drill === 'tracking' && targetRootRef.current) {
             // Valorant-style strafing: the bot stays grounded and moves in
             // unpredictable left/right bursts instead of floating in an orbit.
             const root = targetRootRef.current;
-            const maxX = difficulty === 'elite' ? 3.15 : difficulty === 'trainee' ? 3.9 : 3.55;
+            const maxX = difficulty === 'hell' ? 3.0 : difficulty === 'elite' ? 3.15 : difficulty === 'trainee' ? 3.9 : 3.55;
             const tracking = trackingState;
 
             // Pick a new strafe direction after each segment. Same-direction
@@ -1567,7 +1617,7 @@ function TrainingSetup({
 
             const distanceToEdge = maxX - Math.abs(root.position.x);
             const edgeSlowdown = THREE.MathUtils.clamp(distanceToEdge / .8, .22, 1);
-            const targetSpeed = (difficulty === 'elite' ? 2.7 : 3.05) * edgeSlowdown;
+            const targetSpeed = (difficulty === 'hell' ? 3.25 : difficulty === 'elite' ? 2.7 : 3.05) * edgeSlowdown;
             const accel = 10.5;
             tracking.velocity = THREE.MathUtils.damp(tracking.velocity, tracking.direction * targetSpeed, accel, delta);
 
@@ -1701,6 +1751,13 @@ function TrainingSetup({
             config={settings.crosshair}
             className="crosshair-live"
           />
+
+          {aimCoach && (
+            <>
+              <div className="aim-coach-guide"><span>HEAD LEVEL</span></div>
+              {aimCoachWarning && <div className="aim-coach-warning">↑ 시선을 조금 올려주세요</div>}
+            </>
+          )}
 
           {drill === 'braking' && (
             <div className="braking-guide">
@@ -2334,11 +2391,11 @@ function TrainingSetup({
     const [view, setView] = useState<View>('home');
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<{ drill: Drill; duration: number; difficulty: string }>({ drill: 'flick', duration: 30, difficulty: 'operator' });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
     const [results, setResults] = useState<RunStats | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
-    const start = (drill: Drill, duration: number, difficulty: string) => { setConfig({ drill, duration, difficulty }); setView('range'); };
+    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
     const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <><Home settings={settings} onSettings={() => setSettingsOpen(true)} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />{settingsOpen && <SettingsPanel settings={settings} onChange={setSettings} onClose={() => setSettingsOpen(false)} />}</>;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
