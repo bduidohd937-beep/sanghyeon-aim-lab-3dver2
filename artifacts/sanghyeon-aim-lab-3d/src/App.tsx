@@ -487,8 +487,8 @@ function Home({
 
         <nav className="main-nav">
           <button onClick={() => onNavigate('sensitivity')}>🎯 감도 설정</button>
-          <button onClick={() => onNavigate('growth')}>📈 성장 기록</button>
-          <button onClick={() => onNavigate('crosshair')}>⚙ 설정</button>
+          <button onClick={() => onNavigate('growth')}>📊 연습 기록</button>
+          <button onClick={() => onNavigate('crosshair')}>⚙️ 설정</button>
         </nav>
 
         <div className="header-meta">
@@ -1419,12 +1419,15 @@ function TrainingSetup({
             const lookDirection = new THREE.Vector3();
             camera.getWorldDirection(lookDirection);
             const referenceZ = -6.82;
+            const headLineY = 1.65;
             const distance = referenceZ - camera.position.z;
             const projectedY = Math.abs(lookDirection.z) > 0.001
               ? camera.position.y + lookDirection.y * (distance / -lookDirection.z)
               : camera.position.y;
+            const verticalError = projectedY - headLineY;
+            const tolerance = 0.08;
             const nextAimState: 'low' | 'high' | 'ok' =
-              projectedY < 1.45 ? 'low' : projectedY > 1.82 ? 'high' : 'ok';
+              verticalError < -tolerance ? 'low' : verticalError > tolerance ? 'high' : 'ok';
             if (nextAimState !== aimCoachState) {
               setAimCoachState(nextAimState);
               setAimCoachWarning(nextAimState !== 'ok');
@@ -1593,7 +1596,7 @@ function TrainingSetup({
           {aimCoach && (
             <>
               <div className="aim-coach-guide"><span>HEAD LEVEL</span></div>
-              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↑ 시선을 조금 올려주세요' : '↓ 에임이 너무 높습니다'}</div>}
+              {aimCoachWarning && <div className={`aim-coach-warning ${aimCoachState === 'high' ? 'high' : ''}`}>{aimCoachState === 'low' ? '↑ 에임이 너무 낮습니다 · 헤드라인으로 올리세요' : '↓ 에임이 너무 높습니다 · 헤드라인으로 내리세요'}</div>}
             </>
           )}
 
