@@ -984,6 +984,15 @@ function TrainingSetup({
       const key = new THREE.DirectionalLight('#d8ffab', 3); key.position.set(-3, 8, 5); key.castShadow = true; scene.add(key);
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#111c21', roughness: .88, metalness: .2 })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
       const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
+      const headLineMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: 0.38 });
+      const headLineGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-6.5, 1.65, -6.82),
+        new THREE.Vector3(6.5, 1.65, -6.82),
+      ]);
+      const headLine = new THREE.Line(headLineGeometry, headLineMaterial);
+      headLine.visible = aimCoach;
+      scene.add(headLine);
+
       const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
       const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
       const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
@@ -1217,6 +1226,13 @@ function TrainingSetup({
       const raycaster = new THREE.Raycaster();
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
+      const syncPointerToAim = () => {
+        if (document.pointerLockElement !== renderer.domElement) return;
+        const rect = renderer.domElement.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        window.dispatchEvent(new MouseEvent('mousemove', { clientX: centerX, clientY: centerY, bubbles: true }));
+      };
       const onPointerMove = (event: PointerEvent) => {
         if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
         const lookScale = .0016 * sensitivityRef.current;
@@ -1329,7 +1345,10 @@ function TrainingSetup({
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.key.toLowerCase()); };
       const onBlur = () => keys.clear();
-      const onPointerLockChange = () => setPointerLocked(document.pointerLockElement === renderer.domElement);
+      const onPointerLockChange = () => {
+        const locked = document.pointerLockElement === renderer.domElement;
+        setPointerLocked(locked);
+      };
       const onCanvasClick = (event: MouseEvent) => onShoot(event);
       const moveSpeed = 4.5;
       const applyMovement = (delta: number) => {
@@ -1348,6 +1367,12 @@ function TrainingSetup({
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
         camera.position.y = 1.6;
       };
+      const lockOnStart = async () => {
+        try {
+          await renderer.domElement.requestPointerLock?.();
+        } catch {}
+      };
+      window.setTimeout(lockOnStart, 80);
       renderer.domElement.addEventListener('pointermove', onPointerMove); renderer.domElement.addEventListener('click', onCanvasClick); document.addEventListener('pointerlockchange', onPointerLockChange); window.addEventListener('keydown', onKeyDown); window.addEventListener('keyup', onKeyUp); window.addEventListener('blur', onBlur);
       const resize = () => { if (!mount || !renderer) return; camera.aspect = mount.clientWidth / mount.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(mount.clientWidth, mount.clientHeight); };
       window.addEventListener('resize', resize);
@@ -1372,13 +1397,13 @@ function TrainingSetup({
           if (aimCoach) {
             const lookDirection = new THREE.Vector3();
             camera.getWorldDirection(lookDirection);
-            const referenceZ = camera.position.z - 5.5;
+            const referenceZ = -6.82;
             const distance = referenceZ - camera.position.z;
             const projectedY = Math.abs(lookDirection.z) > 0.001
               ? camera.position.y + lookDirection.y * (distance / -lookDirection.z)
               : camera.position.y;
             const nextAimState: 'low' | 'high' | 'ok' =
-              projectedY < 1.28 ? 'low' : projectedY > 1.78 ? 'high' : 'ok';
+              projectedY < 1.28 ? 'low' : projectedY > 1.88 ? 'high' : 'ok';
             if (nextAimState !== aimCoachState) {
               setAimCoachState(nextAimState);
               setAimCoachWarning(nextAimState !== 'ok');
