@@ -1149,11 +1149,20 @@ function TrainingSetup({
         pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
         camera.rotation.set(pitch, yaw, 0);
       };
+      const requestPointerLockSafe = () => {
+        if (document.pointerLockElement === renderer.domElement) return;
+        try {
+          const result = renderer.domElement.requestPointerLock?.();
+          if (result && typeof (result as Promise<void>).catch === 'function') {
+            void (result as Promise<void>).catch(() => {});
+          }
+        } catch {}
+      };
       const onShoot = (event: MouseEvent) => {
         if (statusRef.current !== 'active') return;
         event.preventDefault();
         if (document.pointerLockElement !== renderer.domElement) {
-          renderer.domElement.requestPointerLock?.();
+          requestPointerLockSafe();
           return;
         }
 
@@ -1304,7 +1313,7 @@ function TrainingSetup({
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.code); };
       const onBlur = () => keys.clear();
       const onPointerDown = () => {
-        if (statusRef.current === 'active') renderer.domElement.requestPointerLock?.();
+        if (statusRef.current === 'active') requestPointerLockSafe();
       };
       const onPointerLockChange = () => {
         const locked = document.pointerLockElement === renderer.domElement;
