@@ -1534,8 +1534,7 @@ function TrainingSetup({
       setStatus(next);
     };
     const exit = () => {
-      pointerLockBlockedUntilRef.current = Date.now() + 700;
-      if (document.pointerLockElement) document.exitPointerLock();
+      pointerLockBlockedUntilRef.current = Date.now() + 1000;
       finish();
     };
     return (
