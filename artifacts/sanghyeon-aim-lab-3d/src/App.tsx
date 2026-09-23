@@ -1268,7 +1268,7 @@ function TrainingSetup({
       };
       const onKeyDown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd', 'shift', 'control', ' '].includes(key)) {
+        if (['w', 'a', 's', 'd', 'shift', 'c', ' '].includes(key)) {
           keys.add(key);
           event.preventDefault();
         }
@@ -1293,7 +1293,7 @@ function TrainingSetup({
         const input = new THREE.Vector3(horizontal, 0, forwardInput);
         if (input.lengthSq() > 1) input.normalize();
         walkRef.current = keys.has('shift');
-        crouchRef.current = keys.has('control');
+        crouchRef.current = keys.has('c');
 
         if (keys.has(' ') && groundedRef.current && !crouchRef.current) {
           jumpVelocityRef.current = jumpSpeed;
@@ -1327,6 +1327,14 @@ function TrainingSetup({
         camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
       };
+      // 최초 진입 시 타겟을 반드시 생성합니다.
+      // Flick은 선택한 동시 소환 수만큼, Tracking/Braking은 1개를 생성합니다.
+      if (drill === 'flick') {
+        for (let index = 0; index < flickBotCount; index += 1) spawn();
+      } else {
+        spawn();
+      }
+
       const resize = () => {
         camera.aspect = mount.clientWidth / Math.max(1, mount.clientHeight);
         camera.updateProjectionMatrix();
