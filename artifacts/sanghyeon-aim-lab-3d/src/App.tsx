@@ -1316,7 +1316,8 @@ function TrainingSetup({
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.code); };
       const onBlur = () => keys.clear();
-      const onPointerDown = () => {
+      const onPointerDown = (event: MouseEvent) => {
+        if (event.target !== renderer.domElement) return;
         if (statusRef.current === 'active') requestPointerLockSafe();
       };
       const onPointerLockChange = () => {
