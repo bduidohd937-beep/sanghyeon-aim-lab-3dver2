@@ -1164,6 +1164,7 @@ function TrainingSetup({
       };
       const onShoot = (event: MouseEvent) => {
         if (statusRef.current !== 'active') return;
+        if (event.target !== renderer.domElement) return;
         event.preventDefault();
         if (document.pointerLockElement !== renderer.domElement) {
           requestPointerLockSafe();
