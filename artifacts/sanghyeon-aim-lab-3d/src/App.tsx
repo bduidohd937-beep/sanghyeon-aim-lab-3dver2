@@ -697,7 +697,7 @@ function TrainingSetup({
   onBack,
 }: {
   drill: Drill;
-  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean) => void;
+  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean, flickMode?: FlickMode, flickBotCount?: number) => void;
   onBack: () => void;
 }) {
   const [difficulty, setDifficulty] = useState('operator');
@@ -819,41 +819,46 @@ function TrainingSetup({
           </div>
         </section>
 
-        <section className="setup-section">
+        {drill === 'flick' && (
+        <section className="setup-section setup-mode-section">
           <div className="setup-section-head">
             <span>02</span>
             <div>
-              <h2>모드 설정</h2>
-              <p>훈련 방식을 설정하세요.</p>
+              <h2>TRAINING MODE</h2>
+              <p>어디를 맞힐지 선택해.</p>
             </div>
           </div>
 
           <div className="mode-options">
-            {drill === 'flick' && (
-              <>
-                <div className="setup-section-head flick-mode-head">
-                  <span>02</span>
-                  <div><h2>TRAINING MODE</h2><p>어디를 맞힐지 선택해.</p></div>
-                </div>
-                {([
-                  ['random', 'RANDOM', '전방위', '화면 상하좌우에 구형 타겟이 랜덤 등장'],
-                  ['headline', 'HEADLINE', '헤드라인', '화면 중앙 높이에 로봇 타겟이 등장'],
-                  ['robot', 'ROBOT HEAD', '훈련봇', '훈련봇의 머리 중심을 정확히 클릭'],
-                ] as const).map(([id, title, label, desc]) => (
-                  <button key={id} type="button" className={`training-mode-card ${flickMode === id ? 'selected' : ''}`} onClick={() => setFlickMode(id)}>
-                    <span className="training-mode-index">{id === 'random' ? '01' : id === 'headline' ? '02' : '03'}</span>
-                    <span className="training-mode-copy"><strong>{title}</strong><b>{label}</b><small>{desc}</small></span>
-                    <span className="training-mode-check">{flickMode === id ? 'SELECTED' : '→'}</span>
-                  </button>
-                ))}
-              </>
-            )}
+            {([
+              ['random', 'RANDOM', '전방위', '화면 상하좌우에 구형 타겟이 랜덤 등장'],
+              ['headline', 'HEADLINE', '헤드라인', '화면 중앙 높이에 로봇 타겟이 등장'],
+              ['robot', 'ROBOT HEAD', '훈련봇', '훈련봇의 머리 중심을 정확히 클릭'],
+            ] as const).map(([id, title, label, desc], index) => (
+              <button
+                key={id}
+                type="button"
+                className={`training-mode-card ${flickMode === id ? 'selected' : ''}`}
+                onClick={() => setFlickMode(id)}
+              >
+                <span className="training-mode-index">0{index + 1}</span>
+                <span className="training-mode-copy">
+                  <strong>{title}</strong>
+                  <b>{label}</b>
+                  <small>{desc}</small>
+                </span>
+                <span className="training-mode-check">
+                  {flickMode === id ? '✓ SELECTED' : '→'}
+                </span>
+              </button>
+            ))}
           </div>
         </section>
+      )}
 
         <section className="setup-section feedback-section">
           <div className="setup-section-head">
-            <span>03</span>
+            <span>{drill === 'flick' ? '03' : '02'}</span>
             <div><h2>FEEDBACK</h2><p>훈련 중 표시할 교정 기능을 선택하세요.</p></div>
           </div>
           <div className="mode-options">
@@ -870,7 +875,7 @@ function TrainingSetup({
 
         <section className="setup-section compact">
           <div className="setup-section-head">
-            <span>04</span>
+            <span>{drill === 'flick' ? '04' : '03'}</span>
             <div>
               <h2>훈련 시간</h2>
               <p>한 세션의 길이를 선택하세요.</p>
@@ -904,7 +909,7 @@ function TrainingSetup({
             </strong>
           </div>
 
-          <button className="setup-start" onClick={() => setLaunchStep('count')}>훈련 시작 <span>→</span></button>
+          <button className="setup-start" onClick={() => drill === 'flick' ? setLaunchStep('count') : onStart(drill, duration, difficulty, feedbackEnabled, aimCoach)}>훈련 시작 <span>→</span></button>
           {launchStep && (
             <div className="modal-dim setup-launch-dim">
               <div className="pause-modal setup-launch-modal">
@@ -925,7 +930,7 @@ function TrainingSetup({
                     </div>
                     <div className="modal-actions">
                       <button className="secondary-button" onClick={() => setLaunchStep('count')}>← 이전</button>
-                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach); }}>훈련 시작 →</button>
+                      <button className="setup-start" onClick={() => { setLaunchStep(null); onStart(drill, duration, difficulty, feedbackEnabled, aimCoach, flickMode, flickBotCount); }}>훈련 시작 →</button>
                     </div>
                   </>
                 )}
@@ -1348,6 +1353,11 @@ function TrainingSetup({
         velocity: 0,
         timer: .35 + Math.random() * .45,
       };
+      if (drill === 'flick') {
+        for (let index = 0; index < flickBotCount; index += 1) spawn();
+      } else {
+        spawn();
+      }
       let frame = 0; let previous = performance.now();
       let fpsFrames = 0; let fpsStarted = performance.now();
       const animate = (now: number) => {
