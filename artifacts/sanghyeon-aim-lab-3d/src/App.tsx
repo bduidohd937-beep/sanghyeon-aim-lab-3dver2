@@ -992,15 +992,6 @@ function TrainingSetup({
       const key = new THREE.DirectionalLight('#d8ffab', 3); key.position.set(-3, 8, 5); key.castShadow = true; scene.add(key);
       const floor = new THREE.Mesh(new THREE.PlaneGeometry(26, 26), new THREE.MeshStandardMaterial({ color: '#111c21', roughness: .88, metalness: .2 })); floor.rotation.x = -Math.PI / 2; floor.position.y = 0; floor.receiveShadow = true; scene.add(floor);
       const grid = new THREE.GridHelper(26, 26, '#29443e', '#18282d'); grid.position.y = .01; (grid.material as THREE.Material).opacity = .6; (grid.material as THREE.Material).transparent = true; scene.add(grid);
-      const headLineMaterial = new THREE.LineBasicMaterial({ color: '#a3ff27', transparent: true, opacity: 0.38 });
-      const headLineGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-6.5, 1.65, -6.82),
-        new THREE.Vector3(6.5, 1.65, -6.82),
-      ]);
-      const headLine = new THREE.Line(headLineGeometry, headLineMaterial);
-      headLine.visible = aimCoach;
-      scene.add(headLine);
-
       const wallMaterial = new THREE.MeshStandardMaterial({ color: '#17262d', roughness: .9 });
       const backWall = new THREE.Mesh(new THREE.BoxGeometry(26, 7, .3), wallMaterial); backWall.position.set(0, 3.5, -7); scene.add(backWall);
       const leftWall = new THREE.Mesh(new THREE.BoxGeometry(.3, 7, 26), wallMaterial); leftWall.position.set(-13, 3.5, -1); scene.add(leftWall);
@@ -1080,24 +1071,35 @@ function TrainingSetup({
         if (targetRootRef.current) group.remove(targetRootRef.current);
         const root = new THREE.Group();
 
-        const botScale = difficulty === 'trainee' ? 1.12 : difficulty === 'hell' ? .70 : difficulty === 'elite' ? .78 : .94;
-        const bodyMaterial = new THREE.MeshStandardMaterial({
-          color: '#667277', emissive: '#182125', emissiveIntensity: .22,
-          metalness: .15, roughness: .72
+        const botScale = difficulty === 'trainee' ? 1.0 : difficulty === 'hell' ? 0.78 : difficulty === 'elite' ? 0.84 : 0.92;
+        const armorMat = new THREE.MeshStandardMaterial({
+          color: '#2b2d35',
+          roughness: 0.4,
+          metalness: 0.8,
         });
-        const headMaterial = new THREE.MeshStandardMaterial({
-          color: '#ddff65', emissive: '#628c1b', emissiveIntensity: 1.15,
-          metalness: .08, roughness: .4
+        const darkMat = new THREE.MeshStandardMaterial({
+          color: '#15171a',
+          roughness: 0.6,
+          metalness: 0.9,
         });
-        const accentMaterial = new THREE.MeshStandardMaterial({
-          color: '#20292d', roughness: .72, metalness: .18
+        const redAccentMat = new THREE.MeshStandardMaterial({
+          color: '#ff4655',
+          emissive: '#ff2222',
+          emissiveIntensity: 0.8,
+          roughness: 0.3,
+        });
+        const whiteHeadMat = new THREE.MeshStandardMaterial({
+          color: '#dce2eb',
+          roughness: 0.2,
+          metalness: 0.5,
+          emissive: '#88aacc',
+          emissiveIntensity: 0.2,
         });
 
         if (drill === 'flick') {
-          // Flick is deliberately a clean spherical target, not a humanoid.
           const sphere = new THREE.Mesh(
             new THREE.SphereGeometry(.30 * botScale, 24, 18),
-            headMaterial
+            redAccentMat
           );
           sphere.name = 'head';
           sphere.position.set(
@@ -1114,109 +1116,168 @@ function TrainingSetup({
           return;
         }
 
-        // Clean, thin humanoid range bot. No bulky front/back protrusions.
-        const head = new THREE.Mesh(
-          new THREE.SphereGeometry(.235 * botScale, 20, 14), headMaterial
-        );
-        head.name = 'head';
-        head.position.y = 1.70 * botScale;
-
+        // VALORANT-style training bot model.
         const neck = new THREE.Mesh(
-          new THREE.CylinderGeometry(.07 * botScale, .075 * botScale, .15 * botScale, 12),
-          accentMaterial
+          new THREE.CylinderGeometry(.08 * botScale, .1 * botScale, .15 * botScale, 8),
+          darkMat
         );
         neck.name = 'body';
-        neck.position.y = 1.48 * botScale;
+        neck.position.y = 1.47;
 
-        // Thin rectangular torso with a subtle shoulder taper, facing the player.
+        const head = new THREE.Mesh(
+          new THREE.BoxGeometry(.24 * botScale, .28 * botScale, .24 * botScale),
+          whiteHeadMat
+        );
+        head.name = 'head';
+        head.position.y = 1.65;
+
+        const headTop = new THREE.Mesh(
+          new THREE.BoxGeometry(.20 * botScale, .05 * botScale, .22 * botScale),
+          redAccentMat
+        );
+        headTop.name = 'body';
+        headTop.position.set(0, .15 * botScale, 0);
+        head.add(headTop);
+
         const torso = new THREE.Mesh(
-          new THREE.BoxGeometry(.46 * botScale, .62 * botScale, .18 * botScale),
-          bodyMaterial
+          new THREE.BoxGeometry(.55 * botScale, .5 * botScale, .3 * botScale),
+          armorMat
         );
         torso.name = 'body';
-        torso.position.y = 1.16 * botScale;
+        torso.position.y = 1.15;
 
-        const shoulder = new THREE.Mesh(
-          new THREE.BoxGeometry(.72 * botScale, .16 * botScale, .20 * botScale),
-          bodyMaterial
+        const chestCore = new THREE.Mesh(
+          new THREE.SphereGeometry(.08 * botScale, 16, 16),
+          redAccentMat
         );
-        shoulder.name = 'body';
-        shoulder.position.y = 1.39 * botScale;
+        chestCore.name = 'body';
+        chestCore.position.set(0, 1.15, .16);
+
+        const shoulderL = new THREE.Mesh(
+          new THREE.BoxGeometry(.22 * botScale, .15 * botScale, .25 * botScale),
+          redAccentMat
+        );
+        shoulderL.name = 'body';
+        shoulderL.position.set(-.38 * botScale, 1.35, 0);
+
+        const shoulderR = new THREE.Mesh(
+          new THREE.BoxGeometry(.22 * botScale, .15 * botScale, .25 * botScale),
+          redAccentMat
+        );
+        shoulderR.name = 'body';
+        shoulderR.position.set(.38 * botScale, 1.35, 0);
+
+        const gunBody = new THREE.Mesh(
+          new THREE.BoxGeometry(.07 * botScale, .12 * botScale, .4 * botScale),
+          armorMat
+        );
+        gunBody.name = 'body';
+        gunBody.position.set(.08 * botScale, 1.05, .58 * botScale);
+
+        const rightUpperArm = new THREE.Mesh(
+          new THREE.CylinderGeometry(.05 * botScale, .05 * botScale, .35 * botScale, 8),
+          armorMat
+        );
+        rightUpperArm.name = 'body';
+        rightUpperArm.position.set(.28 * botScale, 1.2, .18 * botScale);
+        rightUpperArm.rotation.x = -1.1;
+
+        const rightLowerArm = new THREE.Mesh(
+          new THREE.CylinderGeometry(.045 * botScale, .04 * botScale, .35 * botScale, 8),
+          armorMat
+        );
+        rightLowerArm.name = 'body';
+        rightLowerArm.position.set(.15 * botScale, 1.06, .42 * botScale);
+        rightLowerArm.rotation.x = -1.5;
+
+        const leftUpperArm = new THREE.Mesh(
+          new THREE.CylinderGeometry(.05 * botScale, .05 * botScale, .35 * botScale, 8),
+          armorMat
+        );
+        leftUpperArm.name = 'body';
+        leftUpperArm.position.set(-.28 * botScale, 1.2, .18 * botScale);
+        leftUpperArm.rotation.x = -1.1;
+
+        const leftLowerArm = new THREE.Mesh(
+          new THREE.CylinderGeometry(.045 * botScale, .04 * botScale, .35 * botScale, 8),
+          armorMat
+        );
+        leftLowerArm.name = 'body';
+        leftLowerArm.position.set(.02 * botScale, 1.06, .44 * botScale);
+        leftLowerArm.rotation.x = -1.5;
+        leftLowerArm.rotation.y = -.2;
 
         const waist = new THREE.Mesh(
-          new THREE.BoxGeometry(.28 * botScale, .16 * botScale, .16 * botScale),
-          accentMaterial
+          new THREE.CylinderGeometry(.12 * botScale, .15 * botScale, .2 * botScale, 8),
+          darkMat
         );
         waist.name = 'body';
-        waist.position.y = .82 * botScale;
+        waist.position.y = .85;
 
-        const pelvis = new THREE.Mesh(
-          new THREE.BoxGeometry(.40 * botScale, .26 * botScale, .20 * botScale),
-          bodyMaterial
+        const hips = new THREE.Mesh(
+          new THREE.BoxGeometry(.45 * botScale, .2 * botScale, .25 * botScale),
+          armorMat
         );
-        pelvis.name = 'body';
-        pelvis.position.y = .63 * botScale;
+        hips.name = 'body';
+        hips.position.y = .7;
 
-        // Relaxed arms: upper arms hang slightly outward, forearms angle inward.
-        const upperArmGeo = new THREE.CapsuleGeometry(.085 * botScale, .30 * botScale, 5, 10);
-        const forearmGeo = new THREE.CapsuleGeometry(.075 * botScale, .27 * botScale, 5, 10);
-        const leftUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
-        const rightUpperArm = new THREE.Mesh(upperArmGeo, bodyMaterial);
-        const leftForearm = new THREE.Mesh(forearmGeo, accentMaterial);
-        const rightForearm = new THREE.Mesh(forearmGeo, accentMaterial);
-        [leftUpperArm, rightUpperArm, leftForearm, rightForearm].forEach((part) => { part.name = 'body'; });
-
-        leftUpperArm.position.set(-.43 * botScale, 1.17 * botScale, 0);
-        rightUpperArm.position.set(.43 * botScale, 1.17 * botScale, 0);
-        leftUpperArm.rotation.z = -.18;
-        rightUpperArm.rotation.z = .18;
-
-        leftForearm.position.set(-.49 * botScale, .91 * botScale, -.015 * botScale);
-        rightForearm.position.set(.49 * botScale, .91 * botScale, -.015 * botScale);
-        leftForearm.rotation.z = -.10;
-        rightForearm.rotation.z = .10;
-
-        // Slightly separated legs give a stable, natural standing pose.
-        const thighGeo = new THREE.CapsuleGeometry(.105 * botScale, .38 * botScale, 5, 10);
-        const shinGeo = new THREE.CapsuleGeometry(.09 * botScale, .34 * botScale, 5, 10);
-        const leftThigh = new THREE.Mesh(thighGeo, bodyMaterial);
-        const rightThigh = new THREE.Mesh(thighGeo, bodyMaterial);
-        const leftShin = new THREE.Mesh(shinGeo, accentMaterial);
-        const rightShin = new THREE.Mesh(shinGeo, accentMaterial);
-        [leftThigh, rightThigh, leftShin, rightShin].forEach((part) => { part.name = 'body'; });
-
-        leftThigh.position.set(-.13 * botScale, .39 * botScale, 0);
-        rightThigh.position.set(.13 * botScale, .39 * botScale, 0);
-        leftShin.position.set(-.13 * botScale, .06 * botScale, 0);
-        rightShin.position.set(.13 * botScale, .06 * botScale, 0);
-
-        const leftFoot = new THREE.Mesh(
-          new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
+        const thighL = new THREE.Mesh(
+          new THREE.CylinderGeometry(.08 * botScale, .06 * botScale, .45 * botScale, 8),
+          armorMat
         );
-        const rightFoot = new THREE.Mesh(
-          new THREE.BoxGeometry(.17 * botScale, .09 * botScale, .28 * botScale), accentMaterial
+        thighL.name = 'body';
+        thighL.position.set(-.15 * botScale, .4, 0);
+        thighL.rotation.z = -.1;
+
+        const thighR = new THREE.Mesh(
+          new THREE.CylinderGeometry(.08 * botScale, .06 * botScale, .45 * botScale, 8),
+          armorMat
         );
-        leftFoot.name = 'body';
-        rightFoot.name = 'body';
-        leftFoot.position.set(-.13 * botScale, -.23 * botScale, -.055 * botScale);
-        rightFoot.position.set(.13 * botScale, -.23 * botScale, -.055 * botScale);
+        thighR.name = 'body';
+        thighR.position.set(.15 * botScale, .4, 0);
+        thighR.rotation.z = .1;
+
+        const calfL = new THREE.Mesh(
+          new THREE.CylinderGeometry(.06 * botScale, .05 * botScale, .45 * botScale, 8),
+          darkMat
+        );
+        calfL.name = 'body';
+        calfL.position.set(-.18 * botScale, -.05, .05 * botScale);
+
+        const calfR = new THREE.Mesh(
+          new THREE.CylinderGeometry(.06 * botScale, .05 * botScale, .45 * botScale, 8),
+          darkMat
+        );
+        calfR.name = 'body';
+        calfR.position.set(.18 * botScale, -.05, -.05 * botScale);
 
         root.add(
-          head, neck, shoulder, torso, waist, pelvis,
-          leftUpperArm, rightUpperArm, leftForearm, rightForearm,
-          leftThigh, rightThigh, leftShin, rightShin, leftFoot, rightFoot
+          neck,
+          head,
+          torso,
+          chestCore,
+          shoulderL,
+          shoulderR,
+          gunBody,
+          rightUpperArm,
+          rightLowerArm,
+          leftUpperArm,
+          leftLowerArm,
+          waist,
+          hips,
+          thighL,
+          thighR,
+          calfL,
+          calfR
         );
 
         if (drill === 'braking') {
-          // Braking targets use a wider Valorant-like lane so the player has to
-          // actually move left/right before stopping and taking the shot.
           root.position.set(
             (Math.random() - .5) * 8.0,
             .23 * botScale,
             -4.8 - Math.random() * 1.5
           );
         } else {
-          // Tracking starts in a readable central lane; the whole bot moves later.
           root.position.set(0, .23 * botScale, -5.6);
         }
 
@@ -1429,10 +1490,8 @@ function TrainingSetup({
             const tolerance = 0.08;
             const nextAimState: 'low' | 'high' | 'ok' =
               verticalError < -tolerance ? 'low' : verticalError > tolerance ? 'high' : 'ok';
-            if (nextAimState !== aimCoachState) {
-              setAimCoachState(nextAimState);
-              setAimCoachWarning(nextAimState !== 'ok');
-            }
+            setAimCoachState(nextAimState);
+            setAimCoachWarning(nextAimState !== 'ok');
           } else if (aimCoachState !== 'ok') {
             setAimCoachState('ok');
             setAimCoachWarning(false);
@@ -1998,302 +2057,3 @@ function TrainingSetup({
             <div>
               <p className="eyebrow">SANGHYEON AIM LAB // {protocol} RESULT</p>
               <h1>{protocol} RESULT</h1>
-              <span className="result-difficulty">HEADLINE · NEWBIE</span>
-            </div>
-            <div className="result-score-hero"><strong>{sessionScore}</strong><span>/ 100</span><b>SESSION SCORE</b><em>{grade}</em></div>
-          </div>
-          <section className="result-primary-metrics">
-            <div><span>ACCURACY</span><strong>{stats.accuracy.toFixed(1)}%</strong></div>
-            <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
-            <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
-            <div><span>MAX COMBO</span><strong>{stats.maxStreak ?? stats.streak}</strong></div>
-          </section>
-          <section className="result-core">
-            <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
-            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
-            <div className="result-pattern-grid">
-              <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
-              <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
-              <div><b>{reactionGrade}</b><span>REACTION</span></div>
-              <div><b>{aimGrade}</b><span>AIM ACCURACY</span></div>
-            </div>
-          </section>
-          <section className="coaching-card">
-            <span>COACHING</span>
-            <p>{coaching}</p>
-          </section>
-          <div className="result-actions">
-            <button className="start-button" onClick={onAgain}><RotateCcw size={15} /> 다시 훈련</button>
-            <button className="secondary-button" onClick={onHome}>훈련 선택으로</button>
-          </div>
-          <footer className="results-footer"><span>LAB</span><span>기록은 브라우저에 자동 저장됩니다</span></footer>
-        </div>
-      </div>
-    );
-  }
-  function GrowthPage({
-    history,
-    onBack,
-  }: {
-    history: HistoryItem[];
-    onBack: () => void;
-  }) {
-    const best = history.length
-      ? Math.max(...history.map((item) => item.score))
-      : 0;
-
-    const avg = history.length
-      ? Math.round(
-        history
-          .slice(0, 7)
-          .reduce((sum, item) => sum + item.score, 0) /
-        Math.min(7, history.length),
-      )
-      : 0;
-
-    const modules: Drill[] = [
-      'flick',
-      'tracking',
-      'braking',
-    ];
-
-    const moduleName = (type: Drill) => {
-      if (type === 'flick') return 'FLICK';
-      if (type === 'tracking') return 'TRACKING';
-      return 'BRAKING';
-    };
-
-    return (
-      <main className="tool-page">
-        <header className="tool-header">
-          <button className="back-btn" onClick={onBack}>
-            AIM LAB
-          </button>
-
-          <div>
-            <p className="eyebrow">
-              PROGRESS DATABASE // DETAILED
-            </p>
-
-            <h1>성장 기록</h1>
-          </div>
-
-          <div className="game-help">
-            {history.length} SESSIONS
-          </div>
-        </header>
-
-        <section className="growth-overview panel">
-          <div>
-            <p className="eyebrow">
-              WHAT AM I IMPROVING?
-            </p>
-
-            <h2>점수 하나만 보지 않습니다.</h2>
-
-            <p>
-              모드별 최고 기록과 최근 기록을 비교해서
-              훈련 흐름과 성장 추이를 확인합니다.
-            </p>
-          </div>
-
-          <div className="growth-overview-stats">
-            <span>
-              <small>SESSIONS</small>
-              <b>{history.length}</b>
-            </span>
-
-            <span>
-              <small>BEST</small>
-              <b>{best || '--'}</b>
-            </span>
-
-            <span>
-              <small>LAST 7 AVG</small>
-              <b>{avg || '--'}</b>
-            </span>
-          </div>
-        </section>
-
-        <section className="growth-cards">
-          {modules.map((type) => {
-            const rows = history.filter(
-              (item) => item.drill === type,
-            );
-
-            const bestType = rows.length
-              ? Math.max(...rows.map((item) => item.score))
-              : 0;
-
-            const last = rows[0];
-
-            return (
-              <article
-                className={`growth-module panel ${type}`}
-                key={type}
-              >
-                <div className="growth-module-head">
-                  <span>{moduleName(type)}</span>
-                  <b>{rows.length}회</b>
-                </div>
-
-                <div className="growth-main">
-                  <strong>{bestType || '--'}</strong>
-                  <small>BEST SCORE</small>
-                </div>
-
-                <div className="growth-detail-grid">
-                  <div>
-                    <small>최근 점수</small>
-                    <b>{last?.score ?? '--'}</b>
-                  </div>
-
-                  <div>
-                    <small>최근 명중률</small>
-                    <b>
-                      {last
-                        ? `${last.accuracy.toFixed(1)}%`
-                        : '--'}
-                    </b>
-                  </div>
-
-                  <div>
-                    <small>최근 연속</small>
-                    <b>{last?.streak ?? '--'}</b>
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </section>
-
-        <section className="growth-timeline panel">
-          {history.length ? (
-            history.map((record, index) => (
-              <div
-                className="growth-row"
-                key={`${record.date}-${record.score}-${index}`}
-              >
-                <time>{record.date}</time>
-
-                <b>{record.drill.toUpperCase()}</b>
-
-                <strong>{record.score}</strong>
-
-                <span>
-                  {record.accuracy.toFixed(1)}% ACC ·{' '}
-                  {record.hits ?? 0}/{record.shots ?? 0} HITS
-                </span>
-              </div>
-            ))
-          ) : (
-            <div className="empty">
-              아직 완료한 훈련 기록이 없습니다.
-            </div>
-          )}
-        </section>
-      </main>
-    );
-  }
-
-  function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
-    return (
-      <main className="tool-page crosshair-page">
-        <header className="tool-header">
-          <button className="back-btn" onClick={onBack}>AIM LAB</button>
-          <div>
-            <p className="eyebrow">SETTINGS // GLOBAL</p>
-            <h1>설정</h1>
-          </div>
-          <div className="game-help">3D RANGE</div>
-        </header>
-        <section className="crosshair-config-shell panel">
-          <div className="crosshair-big-preview"><CrosshairView config={settings.crosshair} /></div>
-          <div className="crosshair-config-body">
-            <div className="preset-row">
-              {Object.entries(CROSSHAIR_PRESETS).map(([name, preset]) => (
-                <button key={name} className={`preset ${settings.crosshair.style === preset.style && settings.crosshair.size === preset.size ? 'selected' : ''}`} onClick={() => onChange({ ...settings, crosshair: { ...preset } })}>{name}</button>
-              ))}
-            </div>
-            <div className="crosshair-config-grid">
-              <label>색상<input type="color" value={settings.crosshair.color} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, color: e.target.value } })} /></label>
-              <label>크기<input type="range" min="18" max="60" value={settings.crosshair.size} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, size: Number(e.target.value) } })} /></label>
-              <label>간격<input type="range" min="0" max="14" value={settings.crosshair.gap} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, gap: Number(e.target.value) } })} /></label>
-              <label>두께<input type="range" min="1" max="5" value={settings.crosshair.thickness} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, thickness: Number(e.target.value) } })} /></label>
-            </div>
-            <div className="crosshair-toggles">
-              <label><input type="checkbox" checked={settings.crosshair.outline} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, outline: e.target.checked } })} /> 외곽선</label>
-              <label><input type="checkbox" checked={settings.crosshair.centerDot} onChange={(e) => onChange({ ...settings, crosshair: { ...settings.crosshair, centerDot: e.target.checked } })} /> 중앙 점</label>
-            </div>
-            <div className="settings-subsection">
-              <p className="eyebrow">CROSSHAIR</p>
-              <strong>조준선 설정</strong>
-            </div>
-            <div className="settings-subsection telemetry-settings">
-              <p className="eyebrow">RANGE TELEMETRY</p>
-              <strong>현재 프레임 / 발사 오차 표시</strong>
-              <div className="telemetry-mode-grid">
-                {([
-                  ['off', '표시안함'],
-                  ['text', '텍스트표시'],
-                  ['graph', '그래프보기'],
-                  ['both', '둘다보기'],
-                ] as const).map(([value, label]) => (
-                  <button key={value} className={settings.telemetryMode === value ? 'selected' : ''} onClick={() => onChange({ ...settings, telemetryMode: value })}>{label}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-    );
-  }
-
-  function HomeRoute() {
-    const [view, setView] = useState<View>('home');
-    const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
-    const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false });
-    const [results, setResults] = useState<RunStats | null>(null);
-    useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
-    const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach }); setView('range'); };
-    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
-    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); setView('setup'); }} />;
-    if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
-    if (view === 'range') return <RangeScene {...config} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
-    if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
-    if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
-    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
-    return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
-  }
-
-function Router() {
-  return (
-    <ErrorBoundary>
-      <Switch>
-        <Route path="/" component={HomeRoute} />
-        <Route component={NotFound} />
-      </Switch>
-    </ErrorBoundary>
-  );
-}
-
-function App() {
-  return (
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <Router />
-        </WouterRouter>
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
-  );
-}
-
-export default App;
-
-
-
-
-
