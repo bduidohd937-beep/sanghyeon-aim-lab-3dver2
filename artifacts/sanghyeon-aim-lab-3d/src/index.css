@@ -1168,3 +1168,30 @@ body {
 .telemetry-idle-dot{height:2px!important;min-height:2px!important;background:rgba(255,255,255,.28);border-radius:50%!important;align-self:flex-end}
 .telemetry-stable-bar{background:rgba(163,255,39,.55);box-shadow:0 0 6px rgba(163,255,39,.18)}
 .telemetry-error-bar{background:#ff6b73;box-shadow:0 0 7px rgba(255,107,115,.28)}
+
+/* Training module / launch flow */
+.flick-mode-head{margin:18px 18px 10px}
+.training-mode-card{width:100%;display:grid;grid-template-columns:42px 1fr auto;gap:14px;align-items:center;padding:16px 18px;border:0;border-top:1px solid #242c38;background:#11161e;color:#fff;text-align:left;cursor:pointer;transition:.15s}
+.training-mode-card:hover{background:#151c25}
+.training-mode-card.selected{background:#14231f;box-shadow:inset 3px 0 0 #62d5a0}
+.training-mode-index{font:700 11px var(--app-font-mono);color:#5d687a}
+.training-mode-copy strong{display:block;font:800 13px var(--app-font-mono);letter-spacing:.08em}
+.training-mode-copy b{display:block;margin-top:4px;font-size:12px}
+.training-mode-copy small{display:block;margin-top:5px;color:#727c8d;font-size:11px}
+.training-mode-check{font:700 9px var(--app-font-mono);letter-spacing:.08em;color:#62d5a0}
+.feedback-section{margin-top:4px}
+.setup-launch-dim{position:fixed;z-index:50}
+.setup-launch-modal{width:min(560px,calc(100% - 32px))}
+.launch-kicker{display:block;color:#62d5a0;font:700 10px var(--app-font-mono);letter-spacing:.14em;text-align:left;margin-bottom:8px}
+.setup-launch-modal h2{font-size:30px;text-align:left}
+.setup-launch-modal p{text-align:left;line-height:1.6}
+.launch-choice-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:20px 0}
+.launch-choice-grid button{min-height:76px;border:1px solid #34434a;border-radius:7px;background:#0d171c;color:#d8e1df;font:800 20px var(--app-font-mono);cursor:pointer}
+.launch-choice-grid button:hover,.launch-choice-grid button.selected{border-color:#62d5a0;background:#14231f;color:#62d5a0}
+.launch-choice-grid button small{display:block;margin-top:5px;color:#65737a;font:700 8px var(--app-font-mono);letter-spacing:.08em}
+.launch-choice-grid.time{grid-template-columns:repeat(3,1fr)}
+.launch-choice-grid.time button{min-height:82px}
+@media(max-width:700px){
+  .launch-choice-grid{grid-template-columns:repeat(3,1fr)}
+  .training-mode-card{grid-template-columns:32px 1fr auto}
+}
