@@ -1522,8 +1522,7 @@ function TrainingSetup({
             if (
               coachHead &&
               coachRoot &&
-              coachHead.name === 'head' &&
-              drill !== 'flick'
+              coachHead.name === 'head'
             ) {
               const headWorld = new THREE.Vector3();
               coachHead.getWorldPosition(headWorld);
