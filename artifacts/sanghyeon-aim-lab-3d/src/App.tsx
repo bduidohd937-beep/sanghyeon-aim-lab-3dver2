@@ -1109,6 +1109,11 @@ function TrainingSetup({
       const raycaster = new THREE.Raycaster();
       const keys = new Set<string>();
       const velocity = new THREE.Vector3();
+      const trackingState = { direction: 1, velocity: 0, timer: 0 };
+      let frame = 0;
+      let previous = performance.now();
+      let fpsFrames = 0;
+      let fpsStarted = previous;
       const onPointerMove = (event: PointerEvent) => {
         if (statusRef.current !== 'active' || document.pointerLockElement !== renderer.domElement) return;
         const lookScale = THREE.MathUtils.degToRad(0.07) * sensitivityRef.current;
@@ -1322,6 +1327,13 @@ function TrainingSetup({
         camera.position.x = THREE.MathUtils.clamp(camera.position.x, -10.5, 10.5);
         camera.position.z = THREE.MathUtils.clamp(camera.position.z, -5.7, 5.8);
       };
+      const resize = () => {
+        camera.aspect = mount.clientWidth / Math.max(1, mount.clientHeight);
+        camera.updateProjectionMatrix();
+        renderer.setSize(mount.clientWidth, mount.clientHeight);
+      };
+      window.addEventListener('resize', resize);
+
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
         const delta = Math.min((now - previous) / 1000, .05);
@@ -1407,7 +1419,6 @@ function TrainingSetup({
             root.position.x = THREE.MathUtils.clamp(root.position.x, -maxX, maxX);
             root.position.y = HEADLINE_Y - 1.65;
             root.position.z = -9.0;
-            root.rotation.y = 0;
 
             tracking.timer -= delta;
           }
@@ -1426,7 +1437,8 @@ function TrainingSetup({
             }
           });
           if (bestHead) {
-            const projected = bestHead.getWorldPosition(new THREE.Vector3()).project(camera);
+            const coachTarget = bestHead as THREE.Object3D;
+            const projected = coachTarget.getWorldPosition(new THREE.Vector3()).project(camera);
             if (Math.abs(projected.x) > .075) {
               setAimCoachState({ message: projected.x > 0 ? '→ TARGET RIGHT' : '← TARGET LEFT', tone: 'horizontal' });
             } else if (Math.abs(projected.y) > .075) {
