@@ -2727,8 +2727,10 @@ function TrainingSetup({
       const link = document.createElement('a');
       link.href = url;
       link.download = 'sanghyeon-aim-lab-history.json';
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(url);
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
     };
     const importHistory = async (file?: File) => {
       if (!file) return;
