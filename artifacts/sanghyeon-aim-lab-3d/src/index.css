@@ -1171,8 +1171,8 @@ body {
 .telemetry-bars{position:relative;display:flex;align-items:flex-end;gap:3px;min-height:48px;padding:6px 4px 4px;border-bottom:1px solid rgba(163,255,39,.22)}
 .telemetry-bars i{display:block;width:4px;min-height:3px;border-radius:2px 2px 0 0}
 .telemetry-idle-dot{height:2px!important;min-height:2px!important;background:rgba(255,255,255,.28);border-radius:50%!important;align-self:flex-end}
-.telemetry-stable-bar{background:rgba(163,255,39,.55);box-shadow:0 0 6px rgba(163,255,39,.18)}
-.telemetry-error-bar{background:#ff6b73;box-shadow:0 0 7px rgba(255,107,115,.28)}
+.telemetry-stable-bar{background:#f1c84c;box-shadow:0 0 6px rgba(241,200,76,.25)}
+.telemetry-error-bar{background:#37d6cb;box-shadow:0 0 7px rgba(55,214,203,.3)}
 
 /* Training module / launch flow */
 .flick-mode-head{margin:18px 18px 10px}
@@ -1754,6 +1754,22 @@ body {
 .terminal-map-card button{position:absolute;right:12px;bottom:12px;padding:7px 9px;border:1px solid rgba(214,222,204,.25);border-radius:4px;background:rgba(255,255,255,.04);color:#dce6c8;font:10px var(--app-font-sans);}
 .terminal-map-card.selected button{border-color:#c5d4a4;background:#c5d4a4;color:#263126;}
 .terminal-drill-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;}
+.terminal-drill-row{grid-template-columns:repeat(3,minmax(0,1fr));}
+.reaction-signal{position:absolute;left:50%;top:50%;z-index:5;transform:translate(-50%,-50%);width:min(390px,80vw);min-height:150px;padding:24px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;border:2px solid #e75555;border-radius:12px;background:rgba(95,16,22,.88);color:#fff;text-align:center;pointer-events:none;box-shadow:0 12px 48px #0008}
+.reaction-signal.ready{border-color:#4aafff;background:rgba(12,75,132,.9);box-shadow:0 0 45px #258df477}
+.reaction-signal strong{font:700 28px 'Barlow Condensed',sans-serif;letter-spacing:.07em}
+.reaction-signal span{font-size:12px;color:#e0e8e8}
+.reaction-signal small{font:11px var(--app-font-mono);color:#d7d5c8}
+.growth-data-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.growth-data-actions>span{margin-right:6px;color:var(--text-muted);font:10px var(--app-font-mono)}
+.growth-data-actions button,.growth-import-button{padding:9px 11px;border:1px solid rgba(255,255,255,.14);border-radius:5px;background:rgba(255,255,255,.035);color:var(--text-main);font-size:11px;cursor:pointer}
+.growth-import-button input{display:none}
+.growth-import-message{display:block;margin-top:10px;color:var(--accent,#a3ff27)}
+.keybind-capture{min-width:92px;padding:7px 9px;border:1px solid rgba(255,255,255,.15);border-radius:4px;background:rgba(255,255,255,.035);color:var(--text-main);font:11px var(--app-font-mono);cursor:pointer}
+.keybind-capture.listening{border-color:#f1c84c;color:#f1c84c}
+.keybind-footer{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px}
+.keybind-footer>button{padding:8px 10px;border:1px solid rgba(255,255,255,.14);border-radius:4px;background:transparent;color:var(--text-main);font-size:11px;cursor:pointer}
+.keybind-footer .settings-note{margin:0}
 .terminal-drill-row button{display:flex;flex-direction:column;gap:5px;min-height:58px;padding:10px 12px;border:1px solid rgba(217,224,209,.14);border-radius:5px;background:rgba(255,255,255,.025);color:#e5e8dc;text-align:left;}
 .terminal-drill-row button.selected{border-color:#c5d4a4;background:rgba(190,208,158,.12);}
 .terminal-drill-row b{font:600 11px var(--app-font-mono);letter-spacing:.06em;}

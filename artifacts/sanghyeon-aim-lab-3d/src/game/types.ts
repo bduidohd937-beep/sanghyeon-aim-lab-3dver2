@@ -1,5 +1,6 @@
-export type Drill = 'flick' | 'tracking' | 'braking';
-export type FlickMode = 'random' | 'headline' | 'robot';
+export type Drill = 'flick' | 'tracking' | 'braking' | 'reaction' | 'micro' | 'peek';
+export type ReactionType = 'color' | '180';
+export type FlickMode = 'random' | 'robot';
 export type TrainingMapId = 'range' | 'corridor' | 'arena';
 export type BotBehavior = 'static' | 'peek' | 'strafe';
 
@@ -17,6 +18,7 @@ export type TrainingConfig = {
   peekCueEnabled?: boolean;
   damageModelEnabled?: boolean;
   ammoSimulationEnabled?: boolean;
+  reactionType?: ReactionType;
 };
 
 export type View =
@@ -83,6 +85,10 @@ export type Keybinds = {
   crouch: string;
   walk: string;
   jump: string;
+  reload: string;
+  armory: string;
+  pause: string;
+  terminal: string;
 };
 
 export type Settings = {
@@ -102,9 +108,14 @@ export type RunStats = {
   shots: number;
   drill: Drill;
   duration: number;
+  elapsedSeconds?: number;
+  difficulty?: string;
+  mapId?: TrainingMapId;
   avgReaction?: number;
   bestReaction?: number;
   overshoots?: number;
+  falseStarts?: number;
+  correctionCount?: number;
   maxStreak?: number;
   headHits?: number;
   bodyHits?: number;
@@ -113,6 +124,7 @@ export type RunStats = {
   damageDealt?: number;
   movingShots?: number;
   averageSpread?: number;
+  averageErrorPx?: number;
   weaponStats?: Partial<Record<WeaponId, WeaponPerformance>>;
 };
 
@@ -121,6 +133,9 @@ export type HistoryItem = {
   accuracy: number;
   drill: Drill;
   date: string;
+  elapsedSeconds?: number;
+  difficulty?: string;
+  mapId?: TrainingMapId;
   hits?: number;
   shots?: number;
   streak?: number;
@@ -131,5 +146,10 @@ export type HistoryItem = {
   damageDealt?: number;
   movingShots?: number;
   averageSpread?: number;
+  averageErrorPx?: number;
+  falseStarts?: number;
+  correctionCount?: number;
+  avgReaction?: number;
+  bestReaction?: number;
   weaponStats?: Partial<Record<WeaponId, WeaponPerformance>>;
 };

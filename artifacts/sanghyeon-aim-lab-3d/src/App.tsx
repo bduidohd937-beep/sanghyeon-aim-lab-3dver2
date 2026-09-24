@@ -7,9 +7,9 @@ import NotFound from '@/pages/not-found';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, X } from 'lucide-react';
 import * as THREE from 'three';
-import { CROSSHAIR_PRESETS, DEFAULT_CROSSHAIR, DEFAULT_KEYBINDS, DEFAULT_SETTINGS, normalizeSettings, WEAPONS } from './game/config';
+import { CROSSHAIR_PRESETS, DEFAULT_CROSSHAIR, DEFAULT_KEYBINDS, DEFAULT_SETTINGS, normalizeSettings, WEAPONS, WEAPON_DATA_REVISION } from './game/config';
 import { TRAINING_MAPS, buildTrainingWorld } from './game/trainingMaps';
-import type { BotBehavior, CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId, WeaponPerformance } from './game/types';
+import type { BotBehavior, CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, ReactionType, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId, WeaponPerformance } from './game/types';
 import { readStorage, saveStorage } from './persistence/storage';
 
 const queryClient = new QueryClient();
@@ -331,11 +331,11 @@ function Home({
 
   const drillInfo = {
     flick: { icon: '🎯', tag: '01', title: 'FLICK', korean: '정밀 전환', desc: '타겟이 나오면 바로 끌어가서 맞히는 기본 플릭 훈련.', active: true },
-    reaction: { icon: '⚡', tag: '02', title: '시각반응', korean: '반응속도', desc: '언제 뜰지 모르는 신호를 보고 얼마나 빨리 반응하는지 확인.', active: false },
+    reaction: { icon: '⚡', tag: '04', title: '시각반응', korean: '반응속도', desc: '파란 신호 반응 또는 뒤돌아 나타난 봇을 조준하는 훈련.', active: true },
     tracking: { icon: '◎', tag: '02', title: 'TRACKING', korean: '움직임 추적', desc: '움직이는 타겟을 놓치지 않고 따라가는 연습.', active: true },
     braking: { icon: '↔', tag: '03', title: 'BRAKING', korean: '브레이킹', desc: 'A/D 반전으로 멈추고 바로 쏘는 감각을 잡는 훈련.', active: true },
-    switching: { icon: '🔀', tag: '04', title: 'SWITCHING', korean: '타겟 스위칭', desc: '하나 잡자마자 다음 타겟으로 얼마나 빨리 넘어가는지 본다.', active: false },
-    micro: { icon: '✦', tag: '05', title: 'MICRO FLICK', korean: '미세 플릭', desc: '짧은 거리에서 오버슈트 없이 딱 붙여 맞히는 연습.', active: false },
+    micro: { icon: '✦', tag: '05', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 타겟으로 짧고 정밀한 미세 조정을 연습.', active: true },
+    peek: { icon: '◁', tag: '06', title: 'PEEK', korean: '피킹 훈련', desc: '엄폐 뒤에서 예고 후 노출되는 봇을 빠르게 조준.', active: true },
   };
 
   return (
@@ -391,7 +391,7 @@ function Home({
                 <h2>훈련실</h2>
               </div>
 
-              <span className="phase">3 ACTIVE MODULES</span>
+              <span className="phase">6 ACTIVE MODULES</span>
             </div>
 
             <div className="drill-grid">
@@ -504,6 +504,9 @@ function TrainingSetup({
       desc: '이동 후 정확히 멈추고 첫 발을 맞춥니다.',
       icon: '⚡',
     },
+    reaction: { title: 'REACTION', korean: '반응속도', desc: '색 전환 신호 또는 후방 봇에 반응합니다.', icon: '⚡' },
+    micro: { title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 표적을 짧게 조준합니다.', icon: '✦' },
+    peek: { title: 'PEEK', korean: '피킹 훈련', desc: '엄폐를 나오는 봇을 노립니다.', icon: '◁' },
   }[drill] ?? {
     title: 'TRAINING',
     korean: '에임 훈련',
@@ -514,12 +517,12 @@ function TrainingSetup({
   const difficulties = [
     {
       id: 'trainee',
-      title: '응애 나 뉴비에요',
+      title: '응애 나 뉴비',
       sub: '기본적인 조준 감각부터',
     },
     {
       id: 'operator',
-      title: '이제 사람 구실 좀 해볼게요',
+      title: '이제 사람구실좀 해볼까',
       sub: '실전 기본 난이도',
     },
     {
@@ -609,7 +612,6 @@ function TrainingSetup({
           <div className="mode-options">
             {([
               ['random', 'RANDOM', '전방위', '화면 상하좌우에 구형 타겟이 랜덤 등장'],
-              ['headline', 'HEADLINE', '헤드라인', '화면 중앙 높이에 로봇 타겟이 등장'],
               ['robot', 'ROBOT HEAD', '훈련봇', '훈련봇의 머리 중심을 정확히 클릭'],
             ] as const).map(([id, title, label, desc], index) => (
               <button
@@ -710,10 +712,11 @@ function TrainingSetup({
   );
 }
 
-  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, customTargetSize = 0.4, customTargetSpeed = 1, botBehavior = 'peek', peekCueEnabled = true, damageModelEnabled = true, mapId, onMapChange, onConfigChange, onLeave, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; customTargetSize?: number; customTargetSpeed?: number; botBehavior?: BotBehavior; peekCueEnabled?: boolean; damageModelEnabled?: boolean; mapId: TrainingMapId; onMapChange: (map: TrainingMapId) => void; onConfigChange: (config: TrainingConfig) => void; onLeave: () => void; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
+  function RangeScene({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode, customTargetSize = 0.4, customTargetSpeed = 1, botBehavior = 'peek', peekCueEnabled = true, damageModelEnabled = true, ammoSimulationEnabled = false, reactionType = 'color', mapId, onMapChange, onConfigChange, onLeave, settings, onSettingsChange, onFinish }: { drill: Drill; duration: number; difficulty: string; feedbackEnabled: boolean; aimCoach: boolean; flickBotCount: number; flickMode: FlickMode; customTargetSize?: number; customTargetSpeed?: number; botBehavior?: BotBehavior; peekCueEnabled?: boolean; damageModelEnabled?: boolean; ammoSimulationEnabled?: boolean; reactionType?: ReactionType; mapId: TrainingMapId; onMapChange: (map: TrainingMapId) => void; onConfigChange: (config: TrainingConfig) => void; onLeave: () => void; settings: Settings; onSettingsChange: (next: Settings) => void; onFinish: (stats: RunStats) => void }) {
     const mountRef = useRef<HTMLDivElement>(null);
     const statsRef = useRef<RunStats>({ score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill, duration, avgReaction: undefined, bestReaction: undefined, overshoots: 0, maxStreak: 0 });
     const timeRef = useRef(duration);
+    const elapsedSessionSecondsRef = useRef(0);
     const statusRef = useRef<RunStatus>('paused');
     const [status, setStatus] = useState<RunStatus>('paused');
     const [timeLeft, setTimeLeft] = useState(duration);
@@ -721,8 +724,15 @@ function TrainingSetup({
     const [feedback, setFeedback] = useState<{ text: string; miss: boolean; id: number } | null>(null);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [terminalOpen, setTerminalOpen] = useState(true);
+    const terminalOpenRef = useRef(true);
     const [terminalMap, setTerminalMap] = useState<TrainingMapId>(mapId);
     const [terminalDrill, setTerminalDrill] = useState<Drill>(drill);
+    const [terminalReactionType, setTerminalReactionType] = useState<ReactionType>(reactionType);
+    const [reactionPhase, setReactionPhase] = useState<'waiting' | 'ready'>('waiting');
+    const reactionPhaseRef = useRef<'waiting' | 'ready'>('waiting');
+    const reactionLitAtRef = useRef(0);
+    const reactionTimerRef = useRef<number | undefined>(undefined);
+    const microPreviousPositionRef = useRef<THREE.Vector3 | null>(null);
     const [terminalDuration, setTerminalDuration] = useState(duration);
     const [terminalDifficulty, setTerminalDifficulty] = useState(difficulty);
     const [terminalFeedback, setTerminalFeedback] = useState(feedbackEnabled);
@@ -734,8 +744,9 @@ function TrainingSetup({
     const [terminalBotBehavior, setTerminalBotBehavior] = useState<BotBehavior>(botBehavior);
     const [terminalPeekCue, setTerminalPeekCue] = useState(peekCueEnabled);
     const [terminalDamageModel, setTerminalDamageModel] = useState(damageModelEnabled);
-    const [terminalAmmoSimulation, setTerminalAmmoSimulation] = useState(false);
+    const [terminalAmmoSimulation, setTerminalAmmoSimulation] = useState(ammoSimulationEnabled);
     const [armoryOpen, setArmoryOpen] = useState(false);
+    const armoryOpenRef = useRef(false);
     const [ammoByWeapon, setAmmoByWeapon] = useState<Partial<Record<WeaponId, number>>>({});
     const [reloading, setReloading] = useState(false);
     const [reloadUntil, setReloadUntil] = useState(0);
@@ -748,6 +759,9 @@ function TrainingSetup({
     const reloadWeaponRef = useRef<WeaponId>(settings.weapon);
     const armoryReturnStatusRef = useRef<RunStatus>('active');
     const previousWeaponRef = useRef<WeaponId>(settings.weapon);
+    const previousTargetOffsetRef = useRef<THREE.Vector2 | null>(null);
+    const overshootCandidateRef = useRef(false);
+    const pendingMicroCorrectionRef = useRef(false);
     const liveSettingsRef = useRef(settings);
     liveSettingsRef.current = settings;
     const [hasStarted, setHasStarted] = useState(false);
@@ -772,9 +786,22 @@ function TrainingSetup({
     const walkRef = useRef(false);
     const aimCoachStampRef = useRef(0);
     const sensitivityRef = useRef(settings.sensitivity);
-    const difficultySize = difficulty === 'foundation' || difficulty === 'trainee' ? 0.55 : difficulty === 'pressure' || difficulty === 'hell' ? 0.27 : difficulty === 'custom' ? terminalTargetSize : 0.4;
+    const difficultySize = difficulty === 'trainee' ? 0.55 : difficulty === 'hell' ? 0.27 : difficulty === 'elite' ? 0.34 : Math.min(.48, terminalTargetSize);
+    const difficultySpeedScale = difficulty === 'trainee' ? .82 : difficulty === 'elite' ? 1.18 : difficulty === 'hell' ? 1.42 : 1;
     const map = TRAINING_MAPS.find((item) => item.id === mapId) ?? TRAINING_MAPS[0];
+    const beginReactionWait = useCallback(() => {
+      window.clearTimeout(reactionTimerRef.current);
+      reactionPhaseRef.current = 'waiting';
+      setReactionPhase('waiting');
+      reactionTimerRef.current = window.setTimeout(() => {
+        reactionPhaseRef.current = 'ready';
+        reactionLitAtRef.current = performance.now();
+        setReactionPhase('ready');
+      }, 1300 + Math.random() * 2700);
+    }, []);
+    useEffect(() => () => window.clearTimeout(reactionTimerRef.current), []);
     const openTrainingTerminal = useCallback(() => {
+      terminalOpenRef.current = true;
       statusRef.current = 'paused';
       setStatus('paused');
       setTerminalOpen(true);
@@ -795,6 +822,7 @@ function TrainingSetup({
         peekCueEnabled: terminalPeekCue,
         damageModelEnabled: terminalDamageModel,
         ammoSimulationEnabled: terminalAmmoSimulation,
+        reactionType: terminalReactionType,
       };
       ammoSimulationRef.current = terminalAmmoSimulation;
       onMapChange(terminalMap);
@@ -813,11 +841,19 @@ function TrainingSetup({
       burstShotsRef.current = 0;
       nextShotAtRef.current = 0;
       timeRef.current = terminalDuration;
+      elapsedSessionSecondsRef.current = 0;
       setTimeLeft(terminalDuration);
       setFeedback(null);
+      microPreviousPositionRef.current = null;
+      overshootCandidateRef.current = false;
+      previousTargetOffsetRef.current = null;
+      pendingMicroCorrectionRef.current = false;
+      if (terminalDrill === 'reaction' && terminalReactionType === 'color') beginReactionWait();
+      else window.clearTimeout(reactionTimerRef.current);
       statusRef.current = 'active';
       setStatus('active');
       setTerminalOpen(false);
+      terminalOpenRef.current = false;
       setHasStarted(true);
       hasStartedRef.current = true;
     };
@@ -825,11 +861,11 @@ function TrainingSetup({
       if (statusRef.current === 'done') return;
       statusRef.current = 'done';
       const samples = reactionSamplesRef.current;
-      const current = { ...statsRef.current, accuracy: statsRef.current.shots ? statsRef.current.hits / statsRef.current.shots * 100 : 0, avgReaction: samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : undefined, bestReaction: samples.length ? Math.min(...samples) : undefined };
+      const current = { ...statsRef.current, difficulty, mapId, elapsedSeconds: elapsedSessionSecondsRef.current, accuracy: statsRef.current.shots ? statsRef.current.hits / statsRef.current.shots * 100 : 0, avgReaction: samples.length ? samples.reduce((a, b) => a + b, 0) / samples.length : undefined, bestReaction: samples.length ? Math.min(...samples) : undefined };
       statsRef.current = current;
       setStats(current);
       onFinish(current);
-    }, [onFinish]);
+    }, [onFinish, difficulty, mapId]);
     useEffect(() => { sensitivityRef.current = settings.sensitivity; }, [settings.sensitivity]);
 
     useEffect(() => {
@@ -966,10 +1002,10 @@ function TrainingSetup({
         }, 55);
       };
 
-      const fireVisual = (end: THREE.Vector3) => {
+      const fireVisual = (end: THREE.Vector3, recoilSide = 0) => {
         muzzleFlash.material.opacity = 1;
         recoilKick = Math.min(.075, recoilKick + .045);
-        recoilRoll += (Math.random() - .5) * .045;
+        recoilRoll += recoilSide * .018;
         window.setTimeout(() => { muzzleFlash.material.opacity = 0; }, 45);
         createTracer(end);
       };
@@ -1056,6 +1092,14 @@ function TrainingSetup({
         return root;
       };
       const chooseRobotPosition = () => {
+        if (drill === 'reaction' && reactionType === '180') {
+          const angle = yaw + THREE.MathUtils.randFloat(-.22, .22);
+          return new THREE.Vector3(
+            THREE.MathUtils.clamp(camera.position.x + Math.sin(angle) * 6.5, -11.5, 11.5),
+            0,
+            THREE.MathUtils.clamp(camera.position.z + Math.cos(angle) * 6.5, -11.5, 8.5),
+          );
+        }
         if (botBehavior === 'peek' && mapId === 'corridor') {
           const side = Math.random() < .5 ? -1 : 1;
           return new THREE.Vector3(side * 6.8, 0, -11.4 + Math.random() * .4);
@@ -1070,17 +1114,17 @@ function TrainingSetup({
         root.userData.isTrainingBot = true;
         root.userData.hp = 100;
         root.userData.maxHp = 100;
-        root.userData.botBehavior = botBehavior;
+        root.userData.botBehavior = drill === 'peek' ? 'peek' : botBehavior;
         root.userData.baseX = root.position.x;
         root.userData.baseZ = root.position.z;
         root.userData.spawnedAt = performance.now();
         root.userData.reacted = false;
         root.userData.strafeDirection = Math.random() < .5 ? -1 : 1;
         root.userData.strafeTimer = .35 + Math.random() * .75;
-        root.userData.strafeSpeed = 1.4 + Math.random() * 1.2;
+        root.userData.strafeSpeed = (1.4 + Math.random() * 1.2) * terminalTargetSpeed * difficultySpeedScale;
         if (botBehavior === 'peek') {
           root.userData.peekPhase = 'warning';
-          root.userData.peekTimer = peekCueEnabled ? .42 + Math.random() * .28 : .35 + Math.random() * 1.05;
+          root.userData.peekTimer = (peekCueEnabled ? .42 + Math.random() * .28 : .35 + Math.random() * 1.05) / difficultySpeedScale;
           root.userData.peekOffset = (root.position.x > 0 ? -1 : 1) * (mapId === 'corridor' ? 1.9 : 2.4);
           const rig = root.userData.rig as THREE.Group;
           const cue = root.userData.peekCue as THREE.Mesh;
@@ -1100,12 +1144,21 @@ function TrainingSetup({
       };
       const spawn = () => {
         targetSpawnAtRef.current = performance.now();
-        if (drill === 'flick') {
-          const root = flickMode === 'random' ? new THREE.Group() : buildRobot();
-          if (flickMode === 'random') {
-            const radius=difficultySize;
+        if (drill === 'flick' || drill === 'micro') {
+          const root = flickMode === 'random' || drill === 'micro' ? new THREE.Group() : buildRobot();
+          if (flickMode === 'random' || drill === 'micro') {
+            const radius=drill === 'micro' ? Math.max(.12, difficultySize * .48) : difficultySize;
             const sphere=new THREE.Mesh(new THREE.SphereGeometry(radius,24,24),new THREE.MeshStandardMaterial({color:'#ca8969',emissive:'#4d291f',emissiveIntensity:.16,roughness:.52,metalness:.12}));
-            sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.userData.hp=100; root.userData.maxHp=100; root.userData.spawnedAt=performance.now(); root.userData.reacted=false; root.position.copy(findFlickPosition(radius));
+            sphere.name='target'; root.add(sphere); root.userData.targetRadius=radius; root.userData.hp=100; root.userData.maxHp=100; root.userData.spawnedAt=performance.now(); root.userData.reacted=false;
+            if (drill === 'micro' && microPreviousPositionRef.current) {
+              const previousTarget = microPreviousPositionRef.current;
+              root.position.set(
+                THREE.MathUtils.clamp(previousTarget.x + THREE.MathUtils.randFloat(-2.3, 2.3), -10.5, 10.5),
+                THREE.MathUtils.clamp(previousTarget.y + THREE.MathUtils.randFloat(-1.25, 1.25), .95, 4.7),
+                THREE.MathUtils.clamp(previousTarget.z + THREE.MathUtils.randFloat(-1.3, 1.3), -9.5, -2),
+              );
+            } else root.position.copy(findFlickPosition(radius));
+            if (drill === 'micro') microPreviousPositionRef.current = root.position.clone();
           } else {
             const pos=chooseRobotPosition(); root.position.set(pos.x,HEADLINE_Y-1.65,pos.z); configureBot(root);
           }
@@ -1113,7 +1166,7 @@ function TrainingSetup({
         }
         if (targetRootRef.current) { group.remove(targetRootRef.current); disposeTarget(targetRootRef.current); }
         const root=buildRobot(); const robotRootY=HEADLINE_Y-1.65;
-        if (drill === 'braking') {
+        if (drill === 'braking' || drill === 'peek' || (drill === 'reaction' && reactionType === '180')) {
           const position = chooseRobotPosition();
           root.position.set(position.x, robotRootY, position.z);
         }
@@ -1144,6 +1197,24 @@ function TrainingSetup({
         yaw -= (event.movementX || 0) * lookScale;
         pitch = THREE.MathUtils.clamp(pitch - (event.movementY || 0) * lookScale, -1.08, 1.08);
         camera.rotation.set(pitch, yaw, 0);
+        if (drill === 'flick' || drill === 'micro') {
+          const offsets: THREE.Vector2[] = [];
+          group.traverse((object) => {
+            if ((object.name !== 'head' && object.name !== 'target') || !isTargetVisible(object)) return;
+            const projected = object.getWorldPosition(new THREE.Vector3()).project(camera);
+            if (projected.z <= -1 || projected.z >= 1) return;
+            offsets.push(new THREE.Vector2(projected.x, projected.y));
+          });
+          offsets.sort((left, right) => left.length() - right.length());
+          const nearestOffset = offsets[0] ?? null;
+          if (nearestOffset && nearestOffset.length() < .65) {
+            const previousOffset = previousTargetOffsetRef.current;
+            if (previousOffset && ((previousOffset.x * nearestOffset.x < 0) || (previousOffset.y * nearestOffset.y < 0)) && nearestOffset.length() > previousOffset.length() + .015 && previousOffset.length() < .45) {
+              overshootCandidateRef.current = true;
+            }
+            previousTargetOffsetRef.current = nearestOffset.clone();
+          } else previousTargetOffsetRef.current = null;
+        }
       };
       const requestPointerLockSafe = () => {
         if (pointerLockRequestPendingRef.current) return;
@@ -1169,6 +1240,33 @@ function TrainingSetup({
         event?.preventDefault();
 
         const now = performance.now();
+        if (drill === 'reaction' && reactionType === 'color') {
+          if (!event) return;
+          if (reactionPhaseRef.current === 'waiting') {
+            const next = { ...statsRef.current, falseStarts: (statsRef.current.falseStarts ?? 0) + 1, score: Math.max(0, statsRef.current.score - 35) };
+            statsRef.current = next;
+            setStats({ ...next });
+            if (feedbackEnabled) setFeedback({ text: '파란색 신호가 뜨기 전에 눌렀습니다 · 재시작', miss: true, id: Date.now() });
+            beginReactionWait();
+            return;
+          }
+          const reactionMs = Math.max(0, now - reactionLitAtRef.current);
+          reactionSamplesRef.current.push(reactionMs);
+          const next = {
+            ...statsRef.current,
+            shots: statsRef.current.shots + 1,
+            hits: statsRef.current.hits + 1,
+            streak: statsRef.current.streak + 1,
+            maxStreak: Math.max(statsRef.current.maxStreak ?? 0, statsRef.current.streak + 1),
+            accuracy: 100,
+            score: statsRef.current.score + Math.max(1, Math.round(100 - reactionMs * .08)),
+          };
+          statsRef.current = next;
+          setStats({ ...next });
+          if (feedbackEnabled) setFeedback({ text: `${reactionMs.toFixed(0)}ms · 유효 반응`, miss: false, id: Date.now() });
+          beginReactionWait();
+          return;
+        }
         const activeSettings = liveSettingsRef.current;
         const activeWeapon = activeSettings.weapon;
         if (previousWeaponRef.current !== activeWeapon) {
@@ -1206,6 +1304,7 @@ function TrainingSetup({
         const baseSpread = profile.spread;
         const movementSpread = stableForDrill ? 0 : Math.min(1.4, movementSpeed / Math.max(activeSettings.moveSpeed, .1) * 1.4);
         const jumpSpread = groundedRef.current ? 0 : .85;
+        const movementAddedError = movementSpread + jumpSpread;
         const sincePreviousShot = now - lastShotAtRef.current;
         if (sincePreviousShot > minimumFireInterval * 1.8) burstShotsRef.current = 0;
         burstShotsRef.current += 1;
@@ -1213,7 +1312,7 @@ function TrainingSetup({
         const spreadAngle = Math.min(4.5, baseSpread + movementSpread + jumpSpread + rapidSpread);
         lastShotAtRef.current = now;
         setShotError(spreadAngle);
-        setShotErrorHistory((current) => [...current.slice(-17), spreadAngle]);
+        setShotErrorHistory((current) => [...current.slice(-17), movementAddedError]);
 
         const rect = renderer.domElement.getBoundingClientRect();
         const shotNdc = document.pointerLockElement === renderer.domElement || !event
@@ -1222,6 +1321,18 @@ function TrainingSetup({
             ((event.clientX - rect.left) / rect.width) * 2 - 1,
             -((event.clientY - rect.top) / rect.height) * 2 + 1,
           );
+        camera.updateMatrixWorld();
+        let targetErrorPx: number | undefined;
+        let nearestScreenError = Infinity;
+        group.traverse((object) => {
+          if ((object.name !== 'head' && object.name !== 'target') || !isTargetVisible(object)) return;
+          const projected = object.getWorldPosition(new THREE.Vector3()).project(camera);
+          if (projected.z <= -1 || projected.z >= 1) return;
+          const errorX = (projected.x - shotNdc.x) * rect.width * .5;
+          const errorY = (projected.y - shotNdc.y) * rect.height * .5;
+          const error = Math.hypot(errorX, errorY);
+          if (error < nearestScreenError) { nearestScreenError = error; targetErrorPx = error; }
+        });
         raycaster.setFromCamera(shotNdc, camera);
         const shotDirection = raycaster.ray.direction.clone();
         const spreadRadius = Math.tan(THREE.MathUtils.degToRad(spreadAngle)) * Math.sqrt(Math.random());
@@ -1229,8 +1340,9 @@ function TrainingSetup({
         const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
         const patternStep = burstShotsRef.current - 1;
-        const recoilDegrees = Math.min(2.25, patternStep * .12 * profile.recoil);
-        const recoilSide = Math.sin(patternStep * 1.17 + activeWeapon.length) * Math.min(1.25, patternStep * .085 * profile.recoil);
+        const recoilPoint = profile.recoilPattern[Math.min(patternStep, profile.recoilPattern.length - 1)];
+        const recoilDegrees = recoilPoint[1] * profile.recoil;
+        const recoilSide = recoilPoint[0] * profile.recoil;
         shotDirection
           .addScaledVector(cameraUp, Math.tan(THREE.MathUtils.degToRad(recoilDegrees)))
           .addScaledVector(cameraRight, Math.tan(THREE.MathUtils.degToRad(recoilSide)))
@@ -1278,6 +1390,9 @@ function TrainingSetup({
           damageDealt: statsRef.current.damageDealt ?? 0,
           movingShots: statsRef.current.movingShots ?? 0,
         };
+        if (targetErrorPx !== undefined) {
+          next.averageErrorPx = (((statsRef.current.averageErrorPx ?? 0) * statsRef.current.shots) + targetErrorPx) / (statsRef.current.shots + 1);
+        }
 
         const weaponPerformance: WeaponPerformance = {
           shots: 0, hits: 0, headHits: 0, bodyHits: 0, legHits: 0,
@@ -1313,10 +1428,12 @@ function TrainingSetup({
           .clone()
           .addScaledVector(shotDirection, 30);
 
-        fireVisual(tracerEnd);
+        fireVisual(tracerEnd, recoilSide);
 
         if (hitObject && hitRoot && (headHit || bodyHit || legHit)) {
-          const rawDamage = Math.max(1, headHit ? profile.headDamage : bodyHit ? profile.bodyDamage : profile.legDamage);
+          const distance = intersections[0]?.distance ?? 0;
+          const damageBand = profile.damageBands.find((band) => distance <= band.maxDistance) ?? profile.damageBands[profile.damageBands.length - 1];
+          const rawDamage = Math.max(1, headHit ? damageBand.head : bodyHit ? damageBand.body : damageBand.legs);
           const currentHealth = Number(hitRoot.userData.hp ?? 100);
           const actualDamage = damageModelEnabled ? Math.min(currentHealth, rawDamage) : 0;
           if (damageModelEnabled) hitRoot.userData.hp = Math.max(0, currentHealth - rawDamage);
@@ -1329,6 +1446,10 @@ function TrainingSetup({
           else if (bodyHit) weaponPerformance.bodyHits += 1;
           else weaponPerformance.legHits += 1;
           next.hits += 1;
+          if (drill === 'micro' && pendingMicroCorrectionRef.current) {
+            next.correctionCount = (next.correctionCount ?? 0) + 1;
+            pendingMicroCorrectionRef.current = false;
+          }
           next.damageDealt += actualDamage;
           weaponPerformance.damageDealt += actualDamage;
           if (eliminated) {
@@ -1346,7 +1467,7 @@ function TrainingSetup({
             zonePoints *
             (1 + Math.min(next.streak, 15) * .08) *
             (.65 + stopQuality * .35) *
-            (difficulty === 'pressure' || difficulty === 'hell' ? 1.35 : difficulty === 'foundation' || difficulty === 'trainee' ? .9 : 1.12)
+            (difficulty === 'hell' ? 1.35 : difficulty === 'elite' ? 1.22 : difficulty === 'trainee' ? .9 : 1.05)
           );
           next.score += points - (drill === 'braking' && brakingNoMovement ? 20 : 0);
 
@@ -1361,14 +1482,13 @@ function TrainingSetup({
           if (eliminated) {
             group.remove(hitRoot);
             disposeTarget(hitRoot);
-            if (drill === 'flick') {
+            if (drill === 'flick' || drill === 'micro') {
               targetRootRef.current = group;
               spawn();
             } else spawn();
           }
         } else if (drill === 'braking' && brakingNoMovement) {
           next.streak = 0;
-          next.overshoots = (next.overshoots ?? 0) + 1;
           next.score = Math.max(0, next.score - 20);
 
           if (feedbackEnabled) setFeedback({
@@ -1379,6 +1499,10 @@ function TrainingSetup({
         } else {
           next.streak = 0;
           next.score = Math.max(0, next.score - 20);
+          if ((drill === 'flick' || drill === 'micro') && overshootCandidateRef.current) {
+            next.overshoots = (next.overshoots ?? 0) + 1;
+          }
+          if (drill === 'micro') pendingMicroCorrectionRef.current = true;
 
           if (feedbackEnabled) setFeedback({
             text: brakingMoving
@@ -1394,21 +1518,25 @@ function TrainingSetup({
           : 0;
 
         if (drill === 'braking') brakingMovedRef.current = false;
+        overshootCandidateRef.current = false;
+        previousTargetOffsetRef.current = null;
         statsRef.current = next;
         setStats({ ...next });
       };
       const onKeyDown = (event: KeyboardEvent) => {
-        if (event.code === 'KeyB' && !event.repeat && hasStartedRef.current) {
+        const binds = liveSettingsRef.current.keybinds;
+        if (event.code === binds.armory && !event.repeat && hasStartedRef.current) {
           event.preventDefault();
           fireHeldRef.current = false;
           armoryReturnStatusRef.current = statusRef.current;
           statusRef.current = 'paused';
           setStatus('paused');
           setArmoryOpen(true);
+          armoryOpenRef.current = true;
           document.exitPointerLock?.();
           return;
         }
-        if (event.code === 'KeyR' && !event.repeat && hasStartedRef.current && ammoSimulationRef.current && statusRef.current === 'active') {
+        if (event.code === binds.reload && !event.repeat && hasStartedRef.current && ammoSimulationRef.current && statusRef.current === 'active') {
           event.preventDefault();
           const activeWeapon = liveSettingsRef.current.weapon;
           const profile = WEAPONS[activeWeapon];
@@ -1422,13 +1550,26 @@ function TrainingSetup({
           }
           return;
         }
-        if (event.code === 'KeyT' && !event.repeat) {
+        if (event.code === binds.terminal && !event.repeat) {
           fireHeldRef.current = false;
           event.preventDefault();
           openTrainingTerminal();
           return;
         }
-        const allowed = new Set(Object.values(settings.keybinds));
+        if (event.code === binds.pause && hasStartedRef.current && !event.repeat) {
+          event.preventDefault();
+          if (statusRef.current === 'active') {
+            statusRef.current = 'paused';
+            setStatus('paused');
+            fireHeldRef.current = false;
+            document.exitPointerLock?.();
+          } else if (statusRef.current === 'paused' && !terminalOpenRef.current && !armoryOpenRef.current) {
+            statusRef.current = 'active';
+            setStatus('active');
+          }
+          return;
+        }
+        const allowed = new Set([binds.forward, binds.back, binds.left, binds.right, binds.crouch, binds.walk, binds.jump]);
         if (allowed.has(event.code)) {
           keys.add(event.code);
           event.preventDefault();
@@ -1461,14 +1602,15 @@ function TrainingSetup({
       const gravity = 19.0;
       const jumpSpeed = 5.0;
       const applyMovement = (delta: number) => {
-        const horizontal = Number(keys.has(settings.keybinds.right)) - Number(keys.has(settings.keybinds.left));
-        const forwardInput = Number(keys.has(settings.keybinds.forward)) - Number(keys.has(settings.keybinds.back));
+        const binds = liveSettingsRef.current.keybinds;
+        const horizontal = Number(keys.has(binds.right)) - Number(keys.has(binds.left));
+        const forwardInput = Number(keys.has(binds.forward)) - Number(keys.has(binds.back));
         const input = new THREE.Vector3(horizontal, 0, forwardInput);
         if (input.lengthSq() > 1) input.normalize();
-        walkRef.current = keys.has(settings.keybinds.walk);
-        crouchRef.current = keys.has(settings.keybinds.crouch);
+        walkRef.current = keys.has(binds.walk);
+        crouchRef.current = keys.has(binds.crouch);
 
-        if (keys.has(settings.keybinds.jump) && groundedRef.current && !crouchRef.current) {
+        if (keys.has(binds.jump) && groundedRef.current && !crouchRef.current) {
           jumpVelocityRef.current = jumpSpeed;
           groundedRef.current = false;
         }
@@ -1510,8 +1652,8 @@ function TrainingSetup({
       };
       // 최초 진입 시 타겟을 반드시 생성합니다.
       // Flick은 선택한 동시 소환 수만큼, Tracking/Braking은 1개를 생성합니다.
-      if (drill === 'flick') {
-        for (let index = 0; index < flickBotCount; index += 1) spawn();
+      if (drill === 'flick' || drill === 'micro') {
+        for (let index = 0; index < (drill === 'micro' ? 1 : flickBotCount); index += 1) spawn();
       } else {
         spawn();
       }
@@ -1542,6 +1684,7 @@ function TrainingSetup({
           fpsStarted = now;
         }
         if (statusRef.current === 'active') {
+          elapsedSessionSecondsRef.current += delta;
           applyMovement(delta);
           if (reloadUntilRef.current > 0 && now >= reloadUntilRef.current) {
             const reloadedWeapon = reloadWeaponRef.current;
@@ -1551,7 +1694,7 @@ function TrainingSetup({
             reloadUntilRef.current = 0;
             setReloadUntil(0);
             setReloading(false);
-          } else if (reloadUntilRef.current <= 0 && fireHeldRef.current && WEAPONS[liveSettingsRef.current.weapon].automatic) {
+          } else if (reloadUntilRef.current <= 0 && fireHeldRef.current && (WEAPONS[liveSettingsRef.current.weapon].automatic || drill === 'tracking')) {
             onShoot();
           }
           recoilKick = THREE.MathUtils.damp(recoilKick, 0, 14, delta);
@@ -1601,7 +1744,7 @@ function TrainingSetup({
               if (phase === 'warning') {
                 if (root.userData.peekTimer <= 0) {
                   root.userData.peekPhase = 'exposed';
-                  root.userData.peekTimer = .9 + Math.random() * .55;
+                  root.userData.peekTimer = (.9 + Math.random() * .55) / difficultySpeedScale;
                   root.userData.exposedDuration = root.userData.peekTimer;
                   rig.visible = true;
                   cue.visible = false;
@@ -1619,7 +1762,7 @@ function TrainingSetup({
                 root.position.x = Number(root.userData.baseX) + Number(root.userData.peekOffset) * reveal + strafeOffset;
                 if (root.userData.peekTimer <= 0) {
                   root.userData.peekPhase = 'warning';
-                  root.userData.peekTimer = peekCueEnabled ? .45 + Math.random() * .5 : .3 + Math.random() * 1.05;
+                  root.userData.peekTimer = (peekCueEnabled ? .45 + Math.random() * .5 : .3 + Math.random() * 1.05) / difficultySpeedScale;
                   root.userData.exposedDuration = 0;
                   root.position.x = Number(root.userData.baseX);
                   rig.visible = false;
@@ -1710,7 +1853,7 @@ function TrainingSetup({
         renderer.dispose();
         if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed, botBehavior, peekCueEnabled, damageModelEnabled]);
+    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed, botBehavior, peekCueEnabled, damageModelEnabled, reactionType, beginReactionWait]);
 
     useEffect(() => {
       if (duration === 0) {
@@ -1736,8 +1879,9 @@ function TrainingSetup({
       pointerLockBlockedUntilRef.current = Date.now() + 1000;
       finish();
     };
-      const closeTerminal = () => {
+    const closeTerminal = () => {
       setTerminalOpen(false);
+      terminalOpenRef.current = false;
       ammoSimulationRef.current = terminalAmmoSimulation;
       if (hasStarted) {
         statusRef.current = 'active';
@@ -1746,6 +1890,7 @@ function TrainingSetup({
       };
     const closeArmory = () => {
       setArmoryOpen(false);
+      armoryOpenRef.current = false;
       statusRef.current = armoryReturnStatusRef.current;
       setStatus(armoryReturnStatusRef.current);
     };
@@ -1768,11 +1913,7 @@ function TrainingSetup({
               {' / '}
               {map.callout}
               {' / '}
-              {drill === 'flick'
-                ? '플릭 조준'
-                : drill === 'tracking'
-                  ? '트래킹 조준'
-                  : '브레이킹'}
+              {drill === 'flick' ? '플릭 조준' : drill === 'tracking' ? '트래킹 조준' : drill === 'braking' ? '브레이킹' : drill === 'reaction' ? '반응속도' : drill === 'micro' ? '미세 플릭' : '피킹 훈련'}
               {' / '}{reloading ? '재장전 중' : `${WEAPONS[settings.weapon].name}${terminalAmmoSimulation ? ` · ${ammoByWeapon[settings.weapon] ?? WEAPONS[settings.weapon].magazine}/${WEAPONS[settings.weapon].magazine}` : ''}`}
             </div>
 
@@ -1781,11 +1922,11 @@ function TrainingSetup({
                 className="hud-button terminal-open-button"
                 onClick={openTrainingTerminal}
                 aria-label="훈련 터미널 열기"
-                title="훈련 터미널 · T"
+                title={`훈련 터미널 · ${settings.keybinds.terminal.replace('Key', '')}`}
               >
                 <Keyboard size={16} />
               </button>
-              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); setArmoryOpen(true); document.exitPointerLock?.(); }} aria-label="무기고 열기" title="무기고 · B">B</button>
+              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); setArmoryOpen(true); armoryOpenRef.current = true; document.exitPointerLock?.(); }} aria-label="무기고 열기" title={`무기고 · ${settings.keybinds.armory.replace('Key', '')}`}>{settings.keybinds.armory.replace('Key', '')}</button>
               <button
                 className="hud-button"
                 onClick={() => setSettingsOpen(true)}
@@ -1861,6 +2002,14 @@ function TrainingSetup({
             className="crosshair-live"
           />
 
+          {drill === 'reaction' && reactionType === 'color' && (
+            <div className={`reaction-signal ${reactionPhase}`} aria-live="polite">
+              <strong>{reactionPhase === 'ready' ? '파란색 · 발사!' : '빨간색 · 대기'}</strong>
+              <span>{reactionPhase === 'ready' ? '지금 클릭하면 반응시간을 기록합니다.' : '파란색으로 바뀌기 전에 누르면 오반응입니다.'}</span>
+              <small>오반응 {stats.falseStarts ?? 0}회</small>
+            </div>
+          )}
+
           {aimCoach && (
             <div className={`aim-coach-live ${aimCoachState.tone}`}>
               <span>AIM COACH</span>
@@ -1899,7 +2048,8 @@ function TrainingSetup({
               {(settings.telemetryMode === 'text' || settings.telemetryMode === 'both') && (
                 <div className="telemetry-text">
                   <span>FPS <b>{fps || '--'}</b></span>
-                  <span>발사 오차 <b>{shotError === null ? '--' : `${shotError.toFixed(2)}°`}</b></span>
+                  <span>탄퍼짐 총합 <b>{shotError === null ? '--' : `${shotError.toFixed(2)}°`}</b></span>
+                  <span>이동 추가 오차 <b>{shotError === null ? '--' : `${(shotErrorHistory[shotErrorHistory.length - 1] ?? 0).toFixed(2)}°`}</b></span>
                 </div>
               )}
               {(settings.telemetryMode === 'graph' || settings.telemetryMode === 'both') && (
@@ -1911,12 +2061,12 @@ function TrainingSetup({
                       : shotErrorHistory.map((value, i) => (
                         <i
                           key={i}
-                          className={value > 0 ? 'telemetry-error-bar' : 'telemetry-stable-bar'}
-                          style={{ height: String(Math.max(value > 0 ? 10 : 7, value * 7 + 7)) + '%' }}
+                          className={value > .02 ? 'telemetry-error-bar' : 'telemetry-stable-bar'}
+                          style={{ height: String(value > .02 ? Math.min(100, Math.max(12, value * 32)) : 8) + '%' }}
                         />
                       ))}
                   </div>
-                  <small>무기 기본 정확도 + 이동 · 공중 · 연사 퍼짐</small>
+                  <small>노랑: 이동 오차 없음 · 청록: 이동/점프 추가 오차 · 무기 고유 탄퍼짐은 총합 수치에 포함</small>
                 </div>
               )}
             </div>
@@ -1925,18 +2075,21 @@ function TrainingSetup({
           <div className="hud-bottom">
             <div className="move-hint">
               <span>이동</span>
-              <kbd>W</kbd>
-              <kbd>A</kbd>
-              <kbd>S</kbd>
-              <kbd>D</kbd>
-              <kbd>SHIFT</kbd>
+              <kbd>{settings.keybinds.forward.replace('Key', '')}</kbd>
+              <kbd>{settings.keybinds.left.replace('Key', '')}</kbd>
+              <kbd>{settings.keybinds.back.replace('Key', '')}</kbd>
+              <kbd>{settings.keybinds.right.replace('Key', '')}</kbd>
+              <kbd>{settings.keybinds.walk.replace('ShiftLeft', 'SHIFT').replace('ShiftRight', 'SHIFT')}</kbd>
               <span>걷기</span>
-              <kbd>CTRL</kbd>
+              <kbd>{settings.keybinds.crouch.replace('Key', '')}</kbd>
               <span>앉기</span>
-              <kbd>SPACE</kbd>
+              <kbd>{settings.keybinds.jump.replace('Space', 'SPACE')}</kbd>
               <span>점프</span>
               <span>마우스 시점 / 클릭 사격</span>
-              <kbd>T</kbd><span>터미널</span>
+              <kbd>{settings.keybinds.terminal.replace('Key', '')}</kbd><span>터미널</span>
+              <kbd>{settings.keybinds.armory.replace('Key', '')}</kbd><span>무기고</span>
+              <kbd>{settings.keybinds.reload.replace('Key', '')}</kbd><span>재장전</span>
+              <kbd>{settings.keybinds.pause === 'Escape' ? 'ESC' : settings.keybinds.pause.replace('Key', '')}</kbd><span>일시정지</span>
             </div>
 
             <div className="range-status">
@@ -1949,11 +2102,7 @@ function TrainingSetup({
               />
               시작 프로토콜{' '}
               <b>
-                {difficulty === 'foundation'
-                  ? '기본기'
-                  : difficulty === 'pressure'
-                    ? '압박'
-                    : '실전'}
+                {difficulty === 'trainee' ? '응애 나 뉴비' : difficulty === 'elite' ? '나 정도면 실력자지' : difficulty === 'hell' ? '경쟁에서 캐리할게' : '이제 사람구실좀 해볼까'}
               </b>
             </div>
           </div>
@@ -2028,28 +2177,41 @@ function TrainingSetup({
               </section>
 
               <section className="terminal-section terminal-training-options">
-                <div className="terminal-section-heading"><span>02</span><div><b>훈련 프로토콜</b><small>플릭 · 트래킹 · 브레이킹</small></div></div>
+                <div className="terminal-section-heading"><span>02</span><div><b>훈련 프로토콜</b><small>여섯 가지 독립 훈련 모드</small></div></div>
                 <div className="terminal-drill-row">
                   {([
                     ['flick', 'FLICK', '정밀 조준'],
                     ['tracking', 'TRACKING', '움직임 추적'],
                     ['braking', 'BRAKING', '이동 후 정지 사격'],
+                    ['reaction', 'REACTION', '신호 반응 / 180° 전환'],
+                    ['micro', 'MICRO FLICK', '작은 표적 정밀 조정'],
+                    ['peek', 'PEEK', '엄폐 봇 피킹 사격'],
                   ] as const).map(([id, title, detail]) => (
-                    <button key={id} className={terminalDrill === id ? 'selected' : ''} onClick={() => setTerminalDrill(id)}>
+                    <button key={id} className={terminalDrill === id ? 'selected' : ''} onClick={() => { setTerminalDrill(id); if (id === 'micro') { setTerminalTargetCount(1); setTerminalFlickMode('random'); } if (id === 'peek') setTerminalBotBehavior('peek'); }}>
                       <b>{title}</b><small>{detail}</small>
                     </button>
                   ))}
                 </div>
+
+                {terminalDrill === 'reaction' && (
+                  <div className="terminal-setting-block reaction-type-setting">
+                    <b>반응속도 유형</b>
+                    <div className="terminal-chip-row">
+                      <button className={terminalReactionType === 'color' ? 'selected' : ''} onClick={() => setTerminalReactionType('color')}>빨강 → 파랑 신호 클릭</button>
+                      <button className={terminalReactionType === '180' ? 'selected' : ''} onClick={() => setTerminalReactionType('180')}>뒤쪽 180° 봇 반응</button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="terminal-setting-grid">
                   <div className="terminal-setting-block">
                     <b>난이도</b>
                     <div className="terminal-chip-row">
                       {([
-                        ['foundation', '기본기'],
-                        ['duel', '실전'],
-                        ['pressure', '압박'],
-                        ['custom', '직접 설정'],
+                        ['trainee', '응애 나 뉴비'],
+                        ['operator', '이제 사람구실좀 해볼까'],
+                        ['elite', '나 정도면 실력자지'],
+                        ['hell', '경쟁에서 캐리할게'],
                       ] as const).map(([value, label]) => (
                         <button key={value} className={terminalDifficulty === value ? 'selected' : ''} onClick={() => setTerminalDifficulty(value)}>{label}</button>
                       ))}
@@ -2065,21 +2227,13 @@ function TrainingSetup({
                   </div>
                 </div>
 
-                {terminalDifficulty === 'custom' && (
-                  <div className="terminal-setting-grid terminal-custom-settings">
-                    <label className="terminal-range-setting"><span>타겟 크기 <b>{terminalTargetSize.toFixed(2)}</b></span><input type="range" min="0.2" max="0.65" step="0.01" value={terminalTargetSize} onChange={(event) => setTerminalTargetSize(Number(event.target.value))} /></label>
-                    <label className="terminal-range-setting"><span>타겟 속도 <b>{terminalTargetSpeed.toFixed(1)}×</b></span><input type="range" min="0.5" max="1.8" step="0.1" value={terminalTargetSpeed} onChange={(event) => setTerminalTargetSpeed(Number(event.target.value))} /></label>
-                  </div>
-                )}
-
-                {terminalDrill === 'flick' && (
+                {(terminalDrill === 'flick' || terminalDrill === 'micro') && (
                   <div className="terminal-setting-grid terminal-flick-settings">
                     <div className="terminal-setting-block">
                       <b>타겟 유형</b>
                       <div className="terminal-chip-row">
                         {([
                           ['random', '구형 표적'],
-                          ['headline', '헤드라인 봇'],
                           ['robot', '훈련봇'],
                         ] as const).map(([value, label]) => (
                           <button key={value} className={terminalFlickMode === value ? 'selected' : ''} onClick={() => setTerminalFlickMode(value)}>{label}</button>
@@ -2088,7 +2242,9 @@ function TrainingSetup({
                     </div>
                     <div className="terminal-setting-block">
                       <b>동시 타겟 <strong>{terminalTargetCount}</strong></b>
-                      <input type="range" min="1" max="7" step="1" value={terminalTargetCount} onChange={(event) => setTerminalTargetCount(Number(event.target.value))} />
+                      <div className="terminal-chip-row">
+                        {([1, 3, 5, 7] as const).map((count) => <button key={count} className={terminalTargetCount === count ? 'selected' : ''} onClick={() => setTerminalTargetCount(count)}>{count}</button>)}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -2138,15 +2294,17 @@ function TrainingSetup({
                 {(Object.keys(WEAPONS) as WeaponId[]).map((weaponId) => {
                   const weaponProfile = WEAPONS[weaponId];
                   const selected = settings.weapon === weaponId;
+                  const closeBand = weaponProfile.damageBands[0];
+                  const farBand = weaponProfile.damageBands[1];
                   return <button key={weaponId} className={`terminal-map-card armory-card ${selected ? 'selected' : ''}`} onClick={() => onSettingsChange({ ...settings, weapon: weaponId })}>
                     <span className="terminal-map-index">{weaponProfile.type.toUpperCase()} · {weaponProfile.automatic ? '자동' : '단발'}</span>
                     <strong>{weaponProfile.name}</strong>
                     <p>{weaponProfile.magazine}발 · {weaponProfile.fireRate.toFixed(2)}발/초 · 재장전 {(weaponProfile.reloadTime).toFixed(2)}초</p>
-                    <small>헤드 {weaponProfile.headDamage} · 몸통 {weaponProfile.bodyDamage} · 다리 {weaponProfile.legDamage}</small>
+                    <small>0–{Number.isFinite(closeBand.maxDistance) ? `${closeBand.maxDistance}m` : '전 거리'} H{closeBand.head}/B{closeBand.body}/L{closeBand.legs}{farBand ? ` · ${closeBand.maxDistance}m+ H${farBand.head}/B${farBand.body}/L${farBand.legs}` : ''}</small>
                   </button>;
                 })}
               </div>
-              <footer className="facility-terminal-footer"><span>현재 무기 <b>{WEAPONS[settings.weapon].name}</b> · 탄약은 무기별로 보존됩니다. 피해 수치는 기본 거리 기준입니다.</span><button className="terminal-launch" onClick={closeArmory}>훈련 재개 <span>→</span></button></footer>
+              <footer className="facility-terminal-footer"><span>현재 무기 <b>{WEAPONS[settings.weapon].name}</b> · 탄약은 무기별로 보존됩니다. {WEAPON_DATA_REVISION} 기준 · 비공개 반동/재장전 값은 근사 처리.</span><button className="terminal-launch" onClick={closeArmory}>훈련 재개 <span>→</span></button></footer>
             </section>
           </div>
         )}
@@ -2397,30 +2555,55 @@ function TrainingSetup({
       </main>
     );
   }
+  function scoreTrainingRun(stats: RunStats) {
+    const reaction = stats.avgReaction ?? 0;
+    const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 180) / 7)) : 0;
+    const hitRate = stats.shots ? stats.hits / stats.shots * 100 : 0;
+    const lowMotionRate = stats.shots ? Math.max(0, 100 - (stats.movingShots ?? 0) / stats.shots * 100) : 0;
+    const correctionRate = stats.shots ? Math.max(0, 100 - (stats.correctionCount ?? 0) / stats.shots * 100) : 0;
+    const score = stats.drill === 'flick'
+      ? hitRate * .65 + reactionScore * .35
+      : stats.drill === 'tracking'
+        ? hitRate * .75 + Math.min(100, (stats.maxStreak ?? stats.streak) * 2) * .25
+        : stats.drill === 'braking'
+          ? hitRate * .7 + lowMotionRate * .3
+          : stats.drill === 'reaction'
+            ? reactionScore * .8 + hitRate * .2 - (stats.falseStarts ?? 0) * 8
+            : stats.drill === 'micro'
+              ? hitRate * .75 + correctionRate * .25
+              : hitRate * .75 + reactionScore * .25;
+    return Math.round(Math.max(0, Math.min(100, score)));
+  }
+
   function Results({ stats, onAgain, onHome }: { stats: RunStats; onAgain: () => void; onHome: () => void }) {
-    const protocol = stats.drill === 'flick' ? 'FLICK' : stats.drill === 'tracking' ? 'TRACKING' : 'BRAKING';
+    const protocol = ({ flick: 'FLICK', tracking: 'TRACKING', braking: 'BRAKING', reaction: 'REACTION', micro: 'MICRO FLICK', peek: 'PEEK' } as const)[stats.drill];
     const reaction = stats.avgReaction ?? 0;
     const headshotRate = stats.hits ? ((stats.headHits ?? 0) / stats.hits) * 100 : 0;
-    const reactionScore = reaction ? Math.max(0, Math.min(100, 100 - Math.max(0, reaction - 250) / 8)) : stats.accuracy;
-    const sessionScore = Math.max(0, Math.min(100, Math.round(stats.accuracy * .72 + reactionScore * .28)));
+    const sessionScore = scoreTrainingRun(stats);
     const grade = sessionScore >= 90 ? 'A' : sessionScore >= 80 ? 'B+' : sessionScore >= 70 ? 'B' : sessionScore >= 60 ? 'C' : 'D';
+    const difficultyName = ({ trainee: '응애 나 뉴비', operator: '이제 사람구실좀 해볼까', elite: '나 정도면 실력자지', hell: '경쟁에서 캐리할게' } as Record<string, string>)[stats.difficulty ?? ''] ?? stats.difficulty ?? '기본';
+    const mapName = TRAINING_MAPS.find((map) => map.id === stats.mapId)?.name ?? '훈련 구역';
     const aimGrade = stats.accuracy >= 90 ? 'GOOD' : stats.accuracy >= 75 ? 'FAIR' : 'POOR';
     const reactionGrade = !reaction ? '--' : reaction <= 450 ? 'GOOD' : 'POOR';
     const weakest = (stats.overshoots ?? 0) >= Math.max(2, Math.ceil(stats.shots * .12)) ? 'CHAOS' : 'PRECISION';
     const strongest = stats.accuracy >= 90 ? 'LONG' : 'CLEAN';
-    const coaching = weakest === 'CHAOS'
-      ? `CHAOS 패턴에서 ${stats.hits}/${stats.shots} 적중. 다음 세션은 이 패턴의 첫 이동을 더 작고 빠르게 가져가.`
-      : `명중률 ${stats.accuracy.toFixed(1)}%. 다음 세션은 첫 조준을 더 안정적으로 가져가.`;
+    const coaching = stats.drill === 'reaction' && (stats.falseStarts ?? 0) > 0
+      ? `오반응 ${stats.falseStarts}회가 기록됐어. 색이 바뀌기 전에 손을 떼고 파란 신호만 확인해.`
+      : stats.drill === 'micro' && (stats.correctionCount ?? 0) > 0
+        ? `미세 보정이 ${stats.correctionCount}회 있었어. 첫 이동 폭을 줄이고 작은 입력으로 마무리해.`
+        : weakest === 'CHAOS'
+          ? `오버슈트 경향이 보여. 첫 이동 폭을 조금 줄이고 마지막은 작은 보정으로 마무리해.`
+          : `${protocol} 명중률 ${stats.accuracy.toFixed(1)}%. ${reaction ? `평균 반응 ${reaction.toFixed(0)}ms를 기록했어.` : '다음에는 첫 조준을 더 안정적으로 가져가.'}`;
     const usedWeapons = Object.entries(stats.weaponStats ?? {}).filter((entry): entry is [WeaponId, WeaponPerformance] => Boolean(entry[1]?.shots));
     return (
       <div className="aim-app results-screen">
         <div className="results-shell modern-results">
-          <div className="results-top"><Brand /><div className="results-kicker">FLICK RESULT</div></div>
+          <div className="results-top"><Brand /><div className="results-kicker">{protocol} RESULT</div></div>
           <div className="result-identity">
             <div>
               <p className="eyebrow">SANGHYEON AIM LAB // {protocol} RESULT</p>
               <h1>{protocol} RESULT</h1>
-              <span className="result-difficulty">HEADLINE · NEWBIE</span>
+              <span className="result-difficulty">{mapName} · {difficultyName}</span>
             </div>
             <div className="result-score-hero"><strong>{sessionScore}</strong><span>/ 100</span><b>SESSION SCORE</b><em>{grade}</em></div>
           </div>
@@ -2429,10 +2612,11 @@ function TrainingSetup({
             <div><span>AVG REACTION</span><strong>{reaction ? `${reaction.toFixed(1)}ms` : '--'}</strong></div>
             <div><span>BEST REACTION</span><strong>{stats.bestReaction ? `${stats.bestReaction.toFixed(1)}ms` : '--'}</strong></div>
             <div><span>MAX COMBO</span><strong>{stats.maxStreak ?? stats.streak}</strong></div>
+            <div><span>SESSION TIME</span><strong>{(stats.elapsedSeconds ?? 0).toFixed(1)}s</strong></div>
           </section>
           <section className="result-core">
             <div className="result-section-title"><span>핵심 결과</span><small>이번 세션에서 가장 먼저 확인할 수치입니다.</small></div>
-            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.overshoots ?? 0}</b><small>OVERSHOOTS</small></div>
+            <div className="result-hit-line"><strong>{stats.hits} / {stats.shots}</strong><span>HITS / SHOTS</span><b>{stats.drill === 'reaction' ? (stats.falseStarts ?? 0) : (stats.overshoots ?? 0)}</b><small>{stats.drill === 'reaction' ? 'FALSE STARTS' : 'OVERSHOOTS'}</small></div>
             <div className="result-zone-grid">
               <div><b>{stats.headHits ?? 0}</b><span>HEAD · {headshotRate.toFixed(0)}%</span></div>
               <div><b>{stats.bodyHits ?? 0}</b><span>BODY HITS</span></div>
@@ -2440,6 +2624,7 @@ function TrainingSetup({
               <div><b>{stats.kills ?? 0}</b><span>ELIMINATIONS</span></div>
               <div><b>{stats.damageDealt ?? 0}</b><span>DAMAGE</span></div>
               <div><b>{stats.averageSpread?.toFixed(2) ?? '--'}°</b><span>AVG SPREAD</span></div>
+              <div><b>{stats.averageErrorPx?.toFixed(1) ?? '--'}px</b><span>AVG ERROR</span></div>
             </div>
             {usedWeapons.length > 0 && (
               <div className="result-weapons">
@@ -2478,10 +2663,36 @@ function TrainingSetup({
   function GrowthPage({
     history,
     onBack,
+    onImportHistory,
   }: {
     history: HistoryItem[];
     onBack: () => void;
+    onImportHistory: (items: HistoryItem[]) => void;
   }) {
+    const [importMessage, setImportMessage] = useState('');
+    const exportHistory = () => {
+      const blob = new Blob([JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), sessions: history }, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'sanghyeon-aim-lab-history.json';
+      link.click();
+      URL.revokeObjectURL(url);
+    };
+    const importHistory = async (file?: File) => {
+      if (!file) return;
+      try {
+        const parsed: unknown = JSON.parse(await file.text());
+        const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && 'sessions' in parsed ? (parsed as { sessions: unknown }).sessions : null;
+        if (!Array.isArray(rows)) throw new Error('기록 목록이 없습니다.');
+        const valid = rows.filter((row): row is HistoryItem => Boolean(row && typeof row === 'object' && typeof (row as HistoryItem).date === 'string' && typeof (row as HistoryItem).score === 'number' && typeof (row as HistoryItem).drill === 'string'));
+        if (!valid.length && rows.length) throw new Error('가져올 수 있는 기록이 없습니다.');
+        onImportHistory(valid);
+        setImportMessage(`${valid.length}개 기록을 추가했습니다.`);
+      } catch (error) {
+        setImportMessage(error instanceof Error ? error.message : 'JSON 파일을 읽지 못했습니다.');
+      }
+    };
     const best = history.length
       ? Math.max(...history.map((item) => item.score))
       : 0;
@@ -2499,13 +2710,12 @@ function TrainingSetup({
       'flick',
       'tracking',
       'braking',
+      'reaction',
+      'micro',
+      'peek',
     ];
 
-    const moduleName = (type: Drill) => {
-      if (type === 'flick') return 'FLICK';
-      if (type === 'tracking') return 'TRACKING';
-      return 'BRAKING';
-    };
+    const moduleName = (type: Drill) => ({ flick: 'FLICK', tracking: 'TRACKING', braking: 'BRAKING', reaction: 'REACTION', micro: 'MICRO FLICK', peek: 'PEEK' } as const)[type];
 
     const weaponRows = (Object.keys(WEAPONS) as WeaponId[]).map((weaponId) => {
       const samples = history.flatMap((item) => {
@@ -2541,8 +2751,10 @@ function TrainingSetup({
             <h1>성장 기록</h1>
           </div>
 
-          <div className="game-help">
-            {history.length} SESSIONS
+          <div className="growth-data-actions">
+            <span>{history.length} SESSIONS</span>
+            <button onClick={exportHistory}>JSON 내보내기</button>
+            <label className="growth-import-button">JSON 가져오기<input type="file" accept="application/json,.json" onChange={(event) => { void importHistory(event.target.files?.[0]); event.currentTarget.value = ''; }} /></label>
           </div>
         </header>
 
@@ -2635,6 +2847,7 @@ function TrainingSetup({
             <div><p className="eyebrow">WEAPON PERFORMANCE</p><h2>무기별 성능</h2></div>
             <span>발사 수 기준으로 합산한 명중률</span>
           </div>
+          {importMessage && <small className="growth-import-message" role="status">{importMessage}</small>}
           {weaponRows.length ? (
             <div className="growth-weapon-scroll">
               <div className="growth-weapon-row growth-weapon-labels"><b>무기</b><b>세션 · 발사</b><b>명중률</b><b>헤드 · 몸통 · 다리</b><b>제압 · 피해</b><b>평균 탄퍼짐</b></div>
@@ -2662,13 +2875,12 @@ function TrainingSetup({
               >
                 <time>{record.date}</time>
 
-                <b>{record.drill.toUpperCase()}</b>
+                <b>{record.drill.toUpperCase()} · {record.mapId ? (TRAINING_MAPS.find((map) => map.id === record.mapId)?.name ?? '') : '구역 미기록'}</b>
 
                 <strong>{record.score}</strong>
 
                 <span>
-                  {record.accuracy.toFixed(1)}% ACC ·{' '}
-                  {record.hits ?? 0}/{record.shots ?? 0} HITS
+                  {record.accuracy.toFixed(1)}% ACC · {record.hits ?? 0}/{record.shots ?? 0} HITS · {record.elapsedSeconds?.toFixed(0) ?? '--'}s · {record.difficulty ?? '기존 기록'}
                 </span>
               </div>
             ))
@@ -2683,6 +2895,31 @@ function TrainingSetup({
   }
 
   function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+    const [captureKey, setCaptureKey] = useState<keyof Keybinds | null>(null);
+    const [keybindMessage, setKeybindMessage] = useState('');
+    useEffect(() => {
+      if (!captureKey) return;
+      const capture = (event: KeyboardEvent) => {
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        const duplicate = (Object.keys(settings.keybinds) as (keyof Keybinds)[]).find((key) => key !== captureKey && settings.keybinds[key] === event.code);
+        if (duplicate) {
+          setKeybindMessage(`이미 ${duplicate}에 지정된 키입니다.`);
+          return;
+        }
+        onChange({ ...settings, keybinds: { ...settings.keybinds, [captureKey]: event.code } });
+        setKeybindMessage('키를 저장했습니다.');
+        setCaptureKey(null);
+      };
+      window.addEventListener('keydown', capture, true);
+      return () => window.removeEventListener('keydown', capture, true);
+    }, [captureKey, settings, onChange]);
+    const keybindRows: Array<[keyof Keybinds, string]> = [
+      ['forward','앞으로'],['left','왼쪽'],['back','뒤로'],['right','오른쪽'],['crouch','앉기'],['walk','걷기'],['jump','점프'],
+      ['reload','재장전'],['armory','무기고'],['pause','일시정지'],['terminal','훈련 터미널'],
+    ];
+    const keyName = (code: string) => code.replace(/^Key/, '').replace(/^Digit/, '').replace(/^Arrow/, '↑').replace('ShiftLeft', 'L-Shift').replace('ShiftRight', 'R-Shift').replace('ControlLeft', 'L-Ctrl').replace('AltLeft', 'L-Alt');
     return (
       <main className="tool-page crosshair-page">
         <header className="tool-header">
@@ -2728,17 +2965,14 @@ function TrainingSetup({
               <strong>이동 설정</strong>
               <label className="settings-inline">이동 속도 <input type="range" min="2" max="7" step=".1" value={settings.moveSpeed} onChange={(e) => onChange({ ...settings, moveSpeed: Number(e.target.value) })} /><output>{settings.moveSpeed.toFixed(1)}</output></label>
               <div className="keybind-grid">
-                {([
-                  ['forward','앞','W'],['left','왼쪽','A'],['back','뒤','S'],['right','오른쪽','D'],
-                  ['crouch','앉기','C'],['walk','걷기','Shift'],['jump','점프','Space'],
-                ] as const).map(([key,label,placeholder]) => (
-                  <label className="keybind-item" key={key}>
+                {keybindRows.map(([key,label]) => (
+                  <div className="keybind-item" key={key}>
                     <span>{label}</span>
-                    <input value={settings.keybinds[key]} placeholder={placeholder} onChange={(e) => onChange({ ...settings, keybinds: { ...settings.keybinds, [key]: e.target.value || DEFAULT_KEYBINDS[key] } })} />
-                  </label>
+                    <button type="button" className={captureKey === key ? 'keybind-capture listening' : 'keybind-capture'} onClick={() => { setCaptureKey(key); setKeybindMessage('원하는 키를 누르세요.'); }} aria-label={`${label} 키 변경`}>{captureKey === key ? '입력 대기…' : keyName(settings.keybinds[key])}</button>
+                  </div>
                 ))}
               </div>
-              <p className="settings-note">키 입력은 브라우저 KeyboardEvent.code 기준입니다. 기본값: W/A/S/D · C · Shift · Space</p>
+              <div className="keybind-footer"><button type="button" onClick={() => { onChange({ ...settings, keybinds: DEFAULT_KEYBINDS }); setCaptureKey(null); setKeybindMessage('기본 키로 복원했습니다.'); }}>기본 키로 초기화</button><p className="settings-note">{keybindMessage || '버튼을 누른 다음 지정할 키를 누르세요. 중복 키는 저장되지 않습니다.'}</p></div>
             </div>
             <div className="settings-subsection telemetry-settings">
               <p className="eyebrow">RANGE TELEMETRY</p>
@@ -2765,16 +2999,16 @@ function TrainingSetup({
     const [settings, setSettings] = useState<Settings>(() => normalizeSettings(readStorage('sanghyeon-settings', DEFAULT_SETTINGS)));
     const [history, setHistory] = useState<HistoryItem[]>(() => readStorage('sanghyeon-history', []));
     const [mapId, setMapId] = useState<TrainingMapId>('range');
-    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'duel', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random', botBehavior: 'peek', peekCueEnabled: true, damageModelEnabled: true });
+    const [config, setConfig] = useState<TrainingConfig>({ drill: 'flick', duration: 30, difficulty: 'operator', feedbackEnabled: true, aimCoach: false, flickBotCount: 3, flickMode: 'random', botBehavior: 'peek', peekCueEnabled: true, damageModelEnabled: true, reactionType: 'color' });
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
-    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, headHits: stats.headHits, bodyHits: stats.bodyHits, legHits: stats.legHits, kills: stats.kills, damageDealt: stats.damageDealt, movingShots: stats.movingShots, averageSpread: stats.averageSpread, weaponStats: stats.weaponStats, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+    const complete = (stats: RunStats) => { const scored = { ...stats, score: scoreTrainingRun(stats) }; setResults(scored); const item: HistoryItem = { score: scored.score, accuracy: scored.accuracy, drill: scored.drill, date: new Date().toLocaleDateString('ko-KR'), elapsedSeconds: scored.elapsedSeconds, difficulty: scored.difficulty, mapId: scored.mapId, hits: scored.hits, shots: scored.shots, streak: scored.streak, headHits: scored.headHits, bodyHits: scored.bodyHits, legHits: scored.legHits, kills: scored.kills, damageDealt: scored.damageDealt, movingShots: scored.movingShots, averageSpread: scored.averageSpread, averageErrorPx: scored.averageErrorPx, falseStarts: scored.falseStarts, correctionCount: scored.correctionCount, avgReaction: scored.avgReaction, bestReaction: scored.bestReaction, weaponStats: scored.weaponStats }; const next = [item, ...history]; setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); }} onEnterRange={() => setView('range')} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
     if (view === 'range') return <RangeScene {...config} mapId={mapId} onMapChange={setMapId} onConfigChange={setConfig} onLeave={() => setView('home')} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
-    if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} />;
+    if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} onImportHistory={(items) => { const next = [...items, ...history]; setHistory(next); saveStorage('sanghyeon-history', next); }} />;
     if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
   }
