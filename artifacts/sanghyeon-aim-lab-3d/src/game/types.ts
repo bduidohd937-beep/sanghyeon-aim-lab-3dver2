@@ -16,6 +16,7 @@ export type TrainingConfig = {
   botBehavior?: BotBehavior;
   peekCueEnabled?: boolean;
   damageModelEnabled?: boolean;
+  ammoSimulationEnabled?: boolean;
 };
 
 export type View =

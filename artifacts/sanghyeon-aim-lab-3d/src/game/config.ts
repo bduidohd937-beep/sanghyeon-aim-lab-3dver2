@@ -9,20 +9,24 @@ export const WEAPONS: Record<
     spread: number;
     damage: number;
     magazine: number;
+    reloadTime: number;
+    headDamage: number;
+    bodyDamage: number;
+    legDamage: number;
     recoil: number;
     automatic: boolean;
   }
 > = {
-  classic: { name: '클래식', type: '보조', fireRate: 6.75, spread: 0.38, damage: 78, magazine: 12, recoil: 0.72, automatic: false },
-  ghost: { name: '고스트', type: '보조', fireRate: 6.75, spread: 0.3, damage: 105, magazine: 13, recoil: 0.62, automatic: false },
-  sheriff: { name: '셰리프', type: '보조', fireRate: 4, spread: 0.25, damage: 159, magazine: 6, recoil: 0.95, automatic: false },
-  guardian: { name: '가디언', type: '소총', fireRate: 5.25, spread: 0.18, damage: 195, magazine: 12, recoil: 0.82, automatic: false },
-  vandal: { name: '밴달', type: '소총', fireRate: 9.75, spread: 0.25, damage: 160, magazine: 25, recoil: 1, automatic: true },
-  phantom: { name: '팬텀', type: '소총', fireRate: 11, spread: 0.2, damage: 156, magazine: 30, recoil: 0.86, automatic: true },
-  marshal: { name: '마샬', type: '저격', fireRate: 1.5, spread: 0.05, damage: 202, magazine: 5, recoil: 1.15, automatic: false },
-  operator: { name: '오퍼레이터', type: '저격', fireRate: 0.6, spread: 0.035, damage: 255, magazine: 5, recoil: 1.35, automatic: false },
-  ares: { name: '아레스', type: '중기관총', fireRate: 13, spread: 0.42, damage: 160, magazine: 50, recoil: 1.08, automatic: true },
-  odin: { name: '오딘', type: '중기관총', fireRate: 12, spread: 0.46, damage: 160, magazine: 100, recoil: 1.12, automatic: true },
+  classic: { name: '클래식', type: '보조', fireRate: 6.75, spread: 0.38, damage: 78, magazine: 12, reloadTime: 1.75, headDamage: 78, bodyDamage: 26, legDamage: 22, recoil: 0.72, automatic: false },
+  ghost: { name: '고스트', type: '보조', fireRate: 6.75, spread: 0.3, damage: 105, magazine: 13, reloadTime: 1.5, headDamage: 105, bodyDamage: 30, legDamage: 25, recoil: 0.62, automatic: false },
+  sheriff: { name: '셰리프', type: '보조', fireRate: 4, spread: 0.25, damage: 159, magazine: 6, reloadTime: 2.25, headDamage: 159, bodyDamage: 55, legDamage: 46, recoil: 0.95, automatic: false },
+  guardian: { name: '가디언', type: '소총', fireRate: 5.25, spread: 0.18, damage: 195, magazine: 12, reloadTime: 2.5, headDamage: 195, bodyDamage: 65, legDamage: 49, recoil: 0.82, automatic: false },
+  vandal: { name: '밴달', type: '소총', fireRate: 9.75, spread: 0.25, damage: 160, magazine: 25, reloadTime: 2.5, headDamage: 160, bodyDamage: 40, legDamage: 34, recoil: 1, automatic: true },
+  phantom: { name: '팬텀', type: '소총', fireRate: 11, spread: 0.2, damage: 156, magazine: 30, reloadTime: 2.5, headDamage: 156, bodyDamage: 39, legDamage: 33, recoil: 0.86, automatic: true },
+  marshal: { name: '마샬', type: '저격', fireRate: 1.5, spread: 0.05, damage: 202, magazine: 5, reloadTime: 2.5, headDamage: 202, bodyDamage: 101, legDamage: 85, recoil: 1.15, automatic: false },
+  operator: { name: '오퍼레이터', type: '저격', fireRate: 0.6, spread: 0.035, damage: 255, magazine: 5, reloadTime: 3.7, headDamage: 255, bodyDamage: 150, legDamage: 127, recoil: 1.35, automatic: false },
+  ares: { name: '아레스', type: '중기관총', fireRate: 13, spread: 0.42, damage: 160, magazine: 50, reloadTime: 3.25, headDamage: 160, bodyDamage: 40, legDamage: 34, recoil: 1.08, automatic: true },
+  odin: { name: '오딘', type: '중기관총', fireRate: 12, spread: 0.46, damage: 160, magazine: 100, reloadTime: 5, headDamage: 160, bodyDamage: 38, legDamage: 32, recoil: 1.12, automatic: true },
 };
 
 export const DEFAULT_KEYBINDS: Keybinds = {

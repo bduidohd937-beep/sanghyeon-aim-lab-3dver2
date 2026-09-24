@@ -734,7 +734,25 @@ function TrainingSetup({
     const [terminalBotBehavior, setTerminalBotBehavior] = useState<BotBehavior>(botBehavior);
     const [terminalPeekCue, setTerminalPeekCue] = useState(peekCueEnabled);
     const [terminalDamageModel, setTerminalDamageModel] = useState(damageModelEnabled);
+    const [terminalAmmoSimulation, setTerminalAmmoSimulation] = useState(false);
+    const [armoryOpen, setArmoryOpen] = useState(false);
+    const [ammoByWeapon, setAmmoByWeapon] = useState<Partial<Record<WeaponId, number>>>({});
+    const [reloading, setReloading] = useState(false);
+    const [reloadUntil, setReloadUntil] = useState(0);
+    const fireHeldRef = useRef(false);
+    const lastShotNdcRef = useRef(new THREE.Vector2(0, 0));
+    const ammoRef = useRef<Partial<Record<WeaponId, number>>>({});
+    const reloadUntilRef = useRef(0);
+    const burstShotsRef = useRef(0);
+    const nextShotAtRef = useRef(0);
+    const reloadWeaponRef = useRef<WeaponId>(settings.weapon);
+    const armoryReturnStatusRef = useRef<RunStatus>('active');
+    const previousWeaponRef = useRef<WeaponId>(settings.weapon);
+    const liveSettingsRef = useRef(settings);
+    liveSettingsRef.current = settings;
     const [hasStarted, setHasStarted] = useState(false);
+    const hasStartedRef = useRef(false);
+    const ammoSimulationRef = useRef(false);
     const [pointerLocked, setPointerLocked] = useState(false);
     const pointerLockBlockedUntilRef = useRef(0);
     const pointerLockRequestPendingRef = useRef(false);
@@ -776,7 +794,9 @@ function TrainingSetup({
         botBehavior: terminalBotBehavior,
         peekCueEnabled: terminalPeekCue,
         damageModelEnabled: terminalDamageModel,
+        ammoSimulationEnabled: terminalAmmoSimulation,
       };
+      ammoSimulationRef.current = terminalAmmoSimulation;
       onMapChange(terminalMap);
       onConfigChange(nextConfig);
       statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0, headHits: 0, bodyHits: 0, legHits: 0, kills: 0, damageDealt: 0, movingShots: 0, averageSpread: 0, weaponStats: {} };
@@ -784,6 +804,14 @@ function TrainingSetup({
       reactionSamplesRef.current = [];
       targetSpawnAtRef.current = performance.now();
       lastShotAtRef.current = 0;
+      const initialAmmo = Object.fromEntries((Object.keys(WEAPONS) as WeaponId[]).map((weaponId) => [weaponId, WEAPONS[weaponId].magazine])) as Record<WeaponId, number>;
+      ammoRef.current = initialAmmo;
+      setAmmoByWeapon(initialAmmo);
+      reloadUntilRef.current = 0;
+      setReloadUntil(0);
+      setReloading(false);
+      burstShotsRef.current = 0;
+      nextShotAtRef.current = 0;
       timeRef.current = terminalDuration;
       setTimeLeft(terminalDuration);
       setFeedback(null);
@@ -791,6 +819,7 @@ function TrainingSetup({
       setStatus('active');
       setTerminalOpen(false);
       setHasStarted(true);
+      hasStartedRef.current = true;
     };
     const finish = useCallback(() => {
       if (statusRef.current === 'done') return;
@@ -1134,35 +1163,62 @@ function TrainingSetup({
           pointerLockRequestPendingRef.current = false;
         }
       };
-      const onShoot = (event: MouseEvent) => {
+      const onShoot = (event?: MouseEvent) => {
         if (statusRef.current !== 'active') return;
-        if (event.button !== 0) return;
-        if (event.target !== renderer.domElement) return;
-        event.preventDefault();
+        if (event && (event.button !== 0 || event.target !== renderer.domElement)) return;
+        event?.preventDefault();
 
         const now = performance.now();
+        const activeSettings = liveSettingsRef.current;
+        const activeWeapon = activeSettings.weapon;
+        if (previousWeaponRef.current !== activeWeapon) {
+          burstShotsRef.current = 0;
+          previousWeaponRef.current = activeWeapon;
+        }
+        const profile = WEAPONS[activeWeapon];
+        const minimumFireInterval = 1000 / Math.max(profile.fireRate, .1);
+        if (reloadUntilRef.current > 0) {
+          if (now >= reloadUntilRef.current) {
+            const reloadedWeapon = reloadWeaponRef.current;
+            const refreshed = { ...ammoRef.current, [reloadedWeapon]: WEAPONS[reloadedWeapon].magazine };
+            ammoRef.current = refreshed;
+            setAmmoByWeapon(refreshed);
+            reloadUntilRef.current = 0;
+            setReloadUntil(0);
+            setReloading(false);
+          } else return;
+        }
+        if (now < nextShotAtRef.current) return;
+        if (ammoSimulationRef.current && Number(ammoRef.current[activeWeapon] ?? profile.magazine) <= 0) {
+          const until = now + profile.reloadTime * 1000;
+          reloadWeaponRef.current = activeWeapon;
+          reloadUntilRef.current = until;
+          setReloadUntil(until);
+          setReloading(true);
+          fireHeldRef.current = false;
+          return;
+        }
+        nextShotAtRef.current = now + minimumFireInterval;
         const movementSpeed = velocity.length();
         const stableForDrill = drill === 'braking'
           ? movementSpeed <= brakingStopThreshold
           : movementSpeed <= .06;
-        const profile = WEAPONS[settings.weapon];
         const baseSpread = profile.spread;
-        const movementSpread = stableForDrill ? 0 : Math.min(1.4, movementSpeed / Math.max(settings.moveSpeed, .1) * 1.4);
+        const movementSpread = stableForDrill ? 0 : Math.min(1.4, movementSpeed / Math.max(activeSettings.moveSpeed, .1) * 1.4);
         const jumpSpread = groundedRef.current ? 0 : .85;
-        const minimumFireInterval = 1000 / Math.max(profile.fireRate, .1);
         const sincePreviousShot = now - lastShotAtRef.current;
-        const rapidSpread = lastShotAtRef.current > 0 && sincePreviousShot < minimumFireInterval
-          ? Math.min(.55, (1 - sincePreviousShot / minimumFireInterval) * .55)
-          : 0;
+        if (sincePreviousShot > minimumFireInterval * 1.8) burstShotsRef.current = 0;
+        burstShotsRef.current += 1;
+        const rapidSpread = 0;
         const spreadAngle = Math.min(4.5, baseSpread + movementSpread + jumpSpread + rapidSpread);
         lastShotAtRef.current = now;
         setShotError(spreadAngle);
         setShotErrorHistory((current) => [...current.slice(-17), spreadAngle]);
 
         const rect = renderer.domElement.getBoundingClientRect();
-        const shotNdc = document.pointerLockElement === renderer.domElement
-          ? new THREE.Vector2(0, 0)
-          : new THREE.Vector2(
+        const shotNdc = document.pointerLockElement === renderer.domElement || !event
+          ? lastShotNdcRef.current.set(0, 0)
+          : lastShotNdcRef.current.set(
             ((event.clientX - rect.left) / rect.width) * 2 - 1,
             -((event.clientY - rect.top) / rect.height) * 2 + 1,
           );
@@ -1172,7 +1228,12 @@ function TrainingSetup({
         const spreadRotation = Math.random() * Math.PI * 2;
         const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
         const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+        const patternStep = burstShotsRef.current - 1;
+        const recoilDegrees = Math.min(2.25, patternStep * .12 * profile.recoil);
+        const recoilSide = Math.sin(patternStep * 1.17 + activeWeapon.length) * Math.min(1.25, patternStep * .085 * profile.recoil);
         shotDirection
+          .addScaledVector(cameraUp, Math.tan(THREE.MathUtils.degToRad(recoilDegrees)))
+          .addScaledVector(cameraRight, Math.tan(THREE.MathUtils.degToRad(recoilSide)))
           .addScaledVector(cameraRight, Math.cos(spreadRotation) * spreadRadius)
           .addScaledVector(cameraUp, Math.sin(spreadRotation) * spreadRadius)
           .normalize();
@@ -1221,12 +1282,24 @@ function TrainingSetup({
         const weaponPerformance: WeaponPerformance = {
           shots: 0, hits: 0, headHits: 0, bodyHits: 0, legHits: 0,
           kills: 0, damageDealt: 0, movingShots: 0, totalSpread: 0,
-          ...statsRef.current.weaponStats?.[settings.weapon],
+          ...statsRef.current.weaponStats?.[activeWeapon],
         };
         weaponPerformance.shots += 1;
         weaponPerformance.totalSpread += spreadAngle;
         if (movementSpeed > .06) weaponPerformance.movingShots += 1;
-        next.weaponStats = { ...statsRef.current.weaponStats, [settings.weapon]: weaponPerformance };
+        next.weaponStats = { ...statsRef.current.weaponStats, [activeWeapon]: weaponPerformance };
+        if (ammoSimulationRef.current) {
+          const consumed = Math.max(0, Number(ammoRef.current[activeWeapon] ?? profile.magazine) - 1);
+          const updatedAmmo = { ...ammoRef.current, [activeWeapon]: consumed };
+          ammoRef.current = updatedAmmo;
+          setAmmoByWeapon(updatedAmmo);
+          if (consumed === 0) {
+            const until = now + profile.reloadTime * 1000;
+            reloadUntilRef.current = until;
+            setReloadUntil(until);
+            setReloading(true);
+          }
+        }
 
         if (movementSpeed > .06) next.movingShots += 1;
         next.averageSpread = (((statsRef.current.averageSpread ?? 0) * (next.shots - 1)) + spreadAngle) / next.shots;
@@ -1243,8 +1316,7 @@ function TrainingSetup({
         fireVisual(tracerEnd);
 
         if (hitObject && hitRoot && (headHit || bodyHit || legHit)) {
-          const zoneMultiplier = headHit ? 1 : bodyHit ? .5 : .35;
-          const rawDamage = Math.max(1, Math.round(profile.damage * zoneMultiplier));
+          const rawDamage = Math.max(1, headHit ? profile.headDamage : bodyHit ? profile.bodyDamage : profile.legDamage);
           const currentHealth = Number(hitRoot.userData.hp ?? 100);
           const actualDamage = damageModelEnabled ? Math.min(currentHealth, rawDamage) : 0;
           if (damageModelEnabled) hitRoot.userData.hp = Math.max(0, currentHealth - rawDamage);
@@ -1326,7 +1398,32 @@ function TrainingSetup({
         setStats({ ...next });
       };
       const onKeyDown = (event: KeyboardEvent) => {
+        if (event.code === 'KeyB' && !event.repeat && hasStartedRef.current) {
+          event.preventDefault();
+          fireHeldRef.current = false;
+          armoryReturnStatusRef.current = statusRef.current;
+          statusRef.current = 'paused';
+          setStatus('paused');
+          setArmoryOpen(true);
+          document.exitPointerLock?.();
+          return;
+        }
+        if (event.code === 'KeyR' && !event.repeat && hasStartedRef.current && ammoSimulationRef.current && statusRef.current === 'active') {
+          event.preventDefault();
+          const activeWeapon = liveSettingsRef.current.weapon;
+          const profile = WEAPONS[activeWeapon];
+          if (Number(ammoRef.current[activeWeapon] ?? profile.magazine) < profile.magazine) {
+            const until = performance.now() + profile.reloadTime * 1000;
+            reloadWeaponRef.current = activeWeapon;
+            reloadUntilRef.current = until;
+            setReloadUntil(until);
+            setReloading(true);
+            fireHeldRef.current = false;
+          }
+          return;
+        }
         if (event.code === 'KeyT' && !event.repeat) {
+          fireHeldRef.current = false;
           event.preventDefault();
           openTrainingTerminal();
           return;
@@ -1338,19 +1435,24 @@ function TrainingSetup({
         }
       };
       const onKeyUp = (event: KeyboardEvent) => { keys.delete(event.code); };
-      const onBlur = () => { keys.clear(); aimingWithMouse = false; };
+      const onBlur = () => { keys.clear(); aimingWithMouse = false; fireHeldRef.current = false; };
       const onPointerDown = (event: MouseEvent) => {
         if (event.button !== 0) return;
         if (event.target !== renderer.domElement) return;
         aimingWithMouse = true;
+        fireHeldRef.current = true;
+        if (document.pointerLockElement !== renderer.domElement) {
+          const rect = renderer.domElement.getBoundingClientRect();
+          lastShotNdcRef.current.set(((event.clientX - rect.left) / rect.width) * 2 - 1, -((event.clientY - rect.top) / rect.height) * 2 + 1);
+        }
+        onShoot(event);
         if (statusRef.current === 'active') requestPointerLockSafe();
       };
-      const onPointerUp = () => { aimingWithMouse = false; };
+      const onPointerUp = () => { aimingWithMouse = false; fireHeldRef.current = false; };
       const onPointerLockChange = () => {
         const locked = document.pointerLockElement === renderer.domElement;
         setPointerLocked(locked);
       };
-      const onCanvasClick = (event: MouseEvent) => onShoot(event);
       const runSpeed = settings.moveSpeed;
       const walkSpeed = settings.moveSpeed * .55;
       const crouchSpeed = settings.moveSpeed * .45;
@@ -1424,9 +1526,10 @@ function TrainingSetup({
       document.addEventListener('keydown', onKeyDown);
       document.addEventListener('keyup', onKeyUp);
       renderer.domElement.addEventListener('pointerdown', onPointerDown);
-      renderer.domElement.addEventListener('mousedown', onCanvasClick);
       document.addEventListener('pointerlockchange', onPointerLockChange);
       document.addEventListener('pointerup', onPointerUp);
+      document.addEventListener('mouseup', onPointerUp);
+      window.addEventListener('blur', onBlur);
 
       const animate = (now: number) => {
         frame = requestAnimationFrame(animate);
@@ -1440,6 +1543,17 @@ function TrainingSetup({
         }
         if (statusRef.current === 'active') {
           applyMovement(delta);
+          if (reloadUntilRef.current > 0 && now >= reloadUntilRef.current) {
+            const reloadedWeapon = reloadWeaponRef.current;
+            const refreshed = { ...ammoRef.current, [reloadedWeapon]: WEAPONS[reloadedWeapon].magazine };
+            ammoRef.current = refreshed;
+            setAmmoByWeapon(refreshed);
+            reloadUntilRef.current = 0;
+            setReloadUntil(0);
+            setReloading(false);
+          } else if (reloadUntilRef.current <= 0 && fireHeldRef.current && WEAPONS[liveSettingsRef.current.weapon].automatic) {
+            onShoot();
+          }
           recoilKick = THREE.MathUtils.damp(recoilKick, 0, 14, delta);
           recoilRoll = THREE.MathUtils.damp(recoilRoll, 0, 12, delta);
           weapon.position.z = baseWeaponZ + recoilKick;
@@ -1570,9 +1684,9 @@ function TrainingSetup({
         document.removeEventListener('keydown', onKeyDown);
         document.removeEventListener('keyup', onKeyUp);
         renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-        renderer.domElement.removeEventListener('mousedown', onCanvasClick);
         document.removeEventListener('pointerlockchange', onPointerLockChange);
         document.removeEventListener('pointerup', onPointerUp);
+        document.removeEventListener('mouseup', onPointerUp);
         window.removeEventListener('blur', onBlur);
         window.removeEventListener('resize', resize);
         const disposedGeometry = new Set<THREE.BufferGeometry>();
@@ -1622,12 +1736,18 @@ function TrainingSetup({
       pointerLockBlockedUntilRef.current = Date.now() + 1000;
       finish();
     };
-    const closeTerminal = () => {
+      const closeTerminal = () => {
       setTerminalOpen(false);
+      ammoSimulationRef.current = terminalAmmoSimulation;
       if (hasStarted) {
         statusRef.current = 'active';
         setStatus('active');
       }
+      };
+    const closeArmory = () => {
+      setArmoryOpen(false);
+      statusRef.current = armoryReturnStatusRef.current;
+      setStatus(armoryReturnStatusRef.current);
     };
     const leaveTerminal = () => {
       if (hasStarted) closeTerminal();
@@ -1643,7 +1763,7 @@ function TrainingSetup({
 
         <div className="range-hud">
           <div className="hud-top">
-            <div className="hud-brand">
+              <div className="hud-brand">
               <b>SANGHYEON 01</b>
               {' / '}
               {map.callout}
@@ -1653,7 +1773,7 @@ function TrainingSetup({
                 : drill === 'tracking'
                   ? '트래킹 조준'
                   : '브레이킹'}
-              {' / 진행 중'}
+              {' / '}{reloading ? '재장전 중' : `${WEAPONS[settings.weapon].name}${terminalAmmoSimulation ? ` · ${ammoByWeapon[settings.weapon] ?? WEAPONS[settings.weapon].magazine}/${WEAPONS[settings.weapon].magazine}` : ''}`}
             </div>
 
             <div className="hud-actions">
@@ -1665,6 +1785,7 @@ function TrainingSetup({
               >
                 <Keyboard size={16} />
               </button>
+              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); setArmoryOpen(true); document.exitPointerLock?.(); }} aria-label="무기고 열기" title="무기고 · B">B</button>
               <button
                 className="hud-button"
                 onClick={() => setSettingsOpen(true)}
@@ -1996,7 +2117,8 @@ function TrainingSetup({
                 <div className="terminal-toggle-row">
                   <label><input type="checkbox" checked={terminalFeedback} onChange={(event) => setTerminalFeedback(event.target.checked)} /> 명중 피드백</label>
                   <label><input type="checkbox" checked={terminalAimCoach} onChange={(event) => setTerminalAimCoach(event.target.checked)} /> 실시간 에임 코치</label>
-                  <span>무기: {WEAPONS[settings.weapon].name} · 설정에서 변경</span>
+                  <label><input type="checkbox" checked={terminalAmmoSimulation} onChange={(event) => setTerminalAmmoSimulation(event.target.checked)} /> 탄창 및 재장전 시뮬레이션</label>
+              <span>무기: {WEAPONS[settings.weapon].name} · B 무기고에서 선택</span>
                 </div>
               </section>
 
@@ -2004,6 +2126,27 @@ function TrainingSetup({
                 <span><b>{map.name}</b> / {terminalDrill.toUpperCase()} / {terminalDuration === 0 ? '무제한' : `${terminalDuration}초`}</span>
                 <button className="terminal-launch" onClick={launchTraining}>훈련 시작 <span>→</span></button>
               </footer>
+            </section>
+          </div>
+        )}
+
+        {armoryOpen && (
+          <div className="facility-terminal-overlay" role="dialog" aria-modal="true" aria-label="무기고">
+            <section className="facility-terminal armory-terminal">
+              <header className="facility-terminal-header"><div><span className="facility-terminal-kicker">TRAINING ARMORY · SESSION PAUSED</span><h1>무기고</h1><p>총을 선택하세요. 훈련 시간과 봇은 선택하는 동안 멈춰 있습니다.</p></div><button className="terminal-close" onClick={closeArmory} aria-label="무기고 닫기"><X size={19} /></button></header>
+              <div className="terminal-map-grid armory-grid">
+                {(Object.keys(WEAPONS) as WeaponId[]).map((weaponId) => {
+                  const weaponProfile = WEAPONS[weaponId];
+                  const selected = settings.weapon === weaponId;
+                  return <button key={weaponId} className={`terminal-map-card armory-card ${selected ? 'selected' : ''}`} onClick={() => onSettingsChange({ ...settings, weapon: weaponId })}>
+                    <span className="terminal-map-index">{weaponProfile.type.toUpperCase()} · {weaponProfile.automatic ? '자동' : '단발'}</span>
+                    <strong>{weaponProfile.name}</strong>
+                    <p>{weaponProfile.magazine}발 · {weaponProfile.fireRate.toFixed(2)}발/초 · 재장전 {(weaponProfile.reloadTime).toFixed(2)}초</p>
+                    <small>헤드 {weaponProfile.headDamage} · 몸통 {weaponProfile.bodyDamage} · 다리 {weaponProfile.legDamage}</small>
+                  </button>;
+                })}
+              </div>
+              <footer className="facility-terminal-footer"><span>현재 무기 <b>{WEAPONS[settings.weapon].name}</b> · 탄약은 무기별로 보존됩니다. 피해 수치는 기본 거리 기준입니다.</span><button className="terminal-launch" onClick={closeArmory}>훈련 재개 <span>→</span></button></footer>
             </section>
           </div>
         )}
