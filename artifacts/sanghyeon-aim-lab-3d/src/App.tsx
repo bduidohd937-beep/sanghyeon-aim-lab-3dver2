@@ -849,14 +849,14 @@ function TrainingSetup({
       overshootCandidateRef.current = false;
       previousTargetOffsetRef.current = null;
       pendingMicroCorrectionRef.current = false;
-      if (terminalDrill === 'reaction' && terminalReactionType === 'color') beginReactionWait();
-      else window.clearTimeout(reactionTimerRef.current);
+      window.clearTimeout(reactionTimerRef.current);
       statusRef.current = 'active';
       setStatus('active');
       setTerminalOpen(false);
       terminalOpenRef.current = false;
       setHasStarted(true);
       hasStartedRef.current = true;
+      if (terminalDrill === 'reaction' && terminalReactionType === 'color') beginReactionWait();
     };
     const finish = useCallback(() => {
       if (statusRef.current === 'done') return;
