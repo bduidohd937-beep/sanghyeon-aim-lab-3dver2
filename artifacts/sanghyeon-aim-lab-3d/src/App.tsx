@@ -791,6 +791,7 @@ function TrainingSetup({
     const map = TRAINING_MAPS.find((item) => item.id === mapId) ?? TRAINING_MAPS[0];
     const beginReactionWait = useCallback(() => {
       window.clearTimeout(reactionTimerRef.current);
+      if (statusRef.current !== 'active' || terminalOpenRef.current || armoryOpenRef.current) return;
       reactionPhaseRef.current = 'waiting';
       setReactionPhase('waiting');
       reactionTimerRef.current = window.setTimeout(() => {
@@ -1531,6 +1532,7 @@ function TrainingSetup({
           armoryReturnStatusRef.current = statusRef.current;
           statusRef.current = 'paused';
           setStatus('paused');
+          window.clearTimeout(reactionTimerRef.current);
           setArmoryOpen(true);
           armoryOpenRef.current = true;
           document.exitPointerLock?.();
@@ -1561,11 +1563,13 @@ function TrainingSetup({
           if (statusRef.current === 'active') {
             statusRef.current = 'paused';
             setStatus('paused');
+            window.clearTimeout(reactionTimerRef.current);
             fireHeldRef.current = false;
             document.exitPointerLock?.();
           } else if (statusRef.current === 'paused' && !terminalOpenRef.current && !armoryOpenRef.current) {
             statusRef.current = 'active';
             setStatus('active');
+            if (drill === 'reaction' && reactionType === 'color') beginReactionWait();
           }
           return;
         }
@@ -1874,6 +1878,7 @@ function TrainingSetup({
       if (next === 'paused') setPointerLocked(false);
       statusRef.current = next;
       setStatus(next);
+      if (next === 'active' && drill === 'reaction' && reactionType === 'color') beginReactionWait();
     };
     const exit = () => {
       pointerLockBlockedUntilRef.current = Date.now() + 1000;
@@ -1886,6 +1891,7 @@ function TrainingSetup({
       if (hasStarted) {
         statusRef.current = 'active';
         setStatus('active');
+        if (drill === 'reaction' && reactionType === 'color') beginReactionWait();
       }
       };
     const closeArmory = () => {
@@ -1893,6 +1899,7 @@ function TrainingSetup({
       armoryOpenRef.current = false;
       statusRef.current = armoryReturnStatusRef.current;
       setStatus(armoryReturnStatusRef.current);
+      if (armoryReturnStatusRef.current === 'active' && drill === 'reaction' && reactionType === 'color') beginReactionWait();
     };
     const leaveTerminal = () => {
       if (hasStarted) closeTerminal();
@@ -1926,7 +1933,7 @@ function TrainingSetup({
               >
                 <Keyboard size={16} />
               </button>
-              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); setArmoryOpen(true); armoryOpenRef.current = true; document.exitPointerLock?.(); }} aria-label="무기고 열기" title={`무기고 · ${settings.keybinds.armory.replace('Key', '')}`}>{settings.keybinds.armory.replace('Key', '')}</button>
+              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); window.clearTimeout(reactionTimerRef.current); setArmoryOpen(true); armoryOpenRef.current = true; document.exitPointerLock?.(); }} aria-label="무기고 열기" title={`무기고 · ${settings.keybinds.armory.replace('Key', '')}`}>{settings.keybinds.armory.replace('Key', '')}</button>
               <button
                 className="hud-button"
                 onClick={() => setSettingsOpen(true)}
