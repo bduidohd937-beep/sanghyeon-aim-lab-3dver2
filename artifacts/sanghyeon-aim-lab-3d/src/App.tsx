@@ -9,7 +9,7 @@ import { Crosshair, Gauge, Keyboard, Pause, Play, RotateCcw, Settings2, Target, 
 import * as THREE from 'three';
 import { CROSSHAIR_PRESETS, DEFAULT_CROSSHAIR, DEFAULT_KEYBINDS, DEFAULT_SETTINGS, normalizeSettings, WEAPONS } from './game/config';
 import { TRAINING_MAPS, buildTrainingWorld } from './game/trainingMaps';
-import type { BotBehavior, CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId } from './game/types';
+import type { BotBehavior, CrosshairConfig, Drill, FlickMode, HistoryItem, Keybinds, RunStats, RunStatus, Settings, TrainingConfig, TrainingMapId, View, WeaponId, WeaponPerformance } from './game/types';
 import { readStorage, saveStorage } from './persistence/storage';
 
 const queryClient = new QueryClient();
@@ -779,7 +779,7 @@ function TrainingSetup({
       };
       onMapChange(terminalMap);
       onConfigChange(nextConfig);
-      statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0, headHits: 0, bodyHits: 0, legHits: 0, kills: 0, damageDealt: 0, movingShots: 0, averageSpread: 0 };
+      statsRef.current = { score: 0, accuracy: 100, streak: 0, hits: 0, shots: 0, drill: terminalDrill, duration: terminalDuration, overshoots: 0, maxStreak: 0, headHits: 0, bodyHits: 0, legHits: 0, kills: 0, damageDealt: 0, movingShots: 0, averageSpread: 0, weaponStats: {} };
       setStats(statsRef.current);
       reactionSamplesRef.current = [];
       targetSpawnAtRef.current = performance.now();
@@ -1218,6 +1218,16 @@ function TrainingSetup({
           movingShots: statsRef.current.movingShots ?? 0,
         };
 
+        const weaponPerformance: WeaponPerformance = {
+          shots: 0, hits: 0, headHits: 0, bodyHits: 0, legHits: 0,
+          kills: 0, damageDealt: 0, movingShots: 0, totalSpread: 0,
+          ...statsRef.current.weaponStats?.[settings.weapon],
+        };
+        weaponPerformance.shots += 1;
+        weaponPerformance.totalSpread += spreadAngle;
+        if (movementSpeed > .06) weaponPerformance.movingShots += 1;
+        next.weaponStats = { ...statsRef.current.weaponStats, [settings.weapon]: weaponPerformance };
+
         if (movementSpeed > .06) next.movingShots += 1;
         next.averageSpread = (((statsRef.current.averageSpread ?? 0) * (next.shots - 1)) + spreadAngle) / next.shots;
         const brakingMoving =
@@ -1242,9 +1252,17 @@ function TrainingSetup({
           if (headHit) next.headHits += 1;
           else if (bodyHit) next.bodyHits += 1;
           else next.legHits += 1;
+          weaponPerformance.hits += 1;
+          if (headHit) weaponPerformance.headHits += 1;
+          else if (bodyHit) weaponPerformance.bodyHits += 1;
+          else weaponPerformance.legHits += 1;
           next.hits += 1;
           next.damageDealt += actualDamage;
-          if (eliminated) next.kills += 1;
+          weaponPerformance.damageDealt += actualDamage;
+          if (eliminated) {
+            next.kills += 1;
+            weaponPerformance.kills += 1;
+          }
           next.streak += 1;
           next.maxStreak = Math.max(next.maxStreak ?? 0, next.streak);
 
@@ -2250,6 +2268,7 @@ function TrainingSetup({
     const coaching = weakest === 'CHAOS'
       ? `CHAOS 패턴에서 ${stats.hits}/${stats.shots} 적중. 다음 세션은 이 패턴의 첫 이동을 더 작고 빠르게 가져가.`
       : `명중률 ${stats.accuracy.toFixed(1)}%. 다음 세션은 첫 조준을 더 안정적으로 가져가.`;
+    const usedWeapons = Object.entries(stats.weaponStats ?? {}).filter((entry): entry is [WeaponId, WeaponPerformance] => Boolean(entry[1]?.shots));
     return (
       <div className="aim-app results-screen">
         <div className="results-shell modern-results">
@@ -2279,6 +2298,20 @@ function TrainingSetup({
               <div><b>{stats.damageDealt ?? 0}</b><span>DAMAGE</span></div>
               <div><b>{stats.averageSpread?.toFixed(2) ?? '--'}°</b><span>AVG SPREAD</span></div>
             </div>
+            {usedWeapons.length > 0 && (
+              <div className="result-weapons">
+                <div className="result-section-title"><span>무기별 이번 세션</span><small>무기별로 발사와 명중을 따로 집계합니다.</small></div>
+                {usedWeapons.map(([weaponId, weaponStats]) => (
+                  <div className="result-weapon-row" key={weaponId}>
+                    <b>{WEAPONS[weaponId].name}</b>
+                    <span>{weaponStats.hits}/{weaponStats.shots} 명중 · {(weaponStats.hits / weaponStats.shots * 100).toFixed(1)}%</span>
+                    <span>헤드 {weaponStats.headHits} · 몸통 {weaponStats.bodyHits} · 다리 {weaponStats.legHits}</span>
+                    <span>제압 {weaponStats.kills} · 피해 {weaponStats.damageDealt}</span>
+                    <span>평균 탄퍼짐 {(weaponStats.totalSpread / weaponStats.shots).toFixed(2)}°</span>
+                  </div>
+                ))}
+              </div>
+            )}
             <div className="result-pattern-grid">
               <div><b>{weakest}</b><span>WEAKEST PATTERN</span></div>
               <div><b>{strongest}</b><span>STRONGEST PATTERN</span></div>
@@ -2330,6 +2363,25 @@ function TrainingSetup({
       if (type === 'tracking') return 'TRACKING';
       return 'BRAKING';
     };
+
+    const weaponRows = (Object.keys(WEAPONS) as WeaponId[]).map((weaponId) => {
+      const samples = history.flatMap((item) => {
+        const performance = item.weaponStats?.[weaponId];
+        return performance?.shots ? [performance] : [];
+      });
+      const total = samples.reduce((sum, sample) => ({
+        shots: sum.shots + sample.shots,
+        hits: sum.hits + sample.hits,
+        headHits: sum.headHits + sample.headHits,
+        bodyHits: sum.bodyHits + sample.bodyHits,
+        legHits: sum.legHits + sample.legHits,
+        kills: sum.kills + sample.kills,
+        damageDealt: sum.damageDealt + sample.damageDealt,
+        totalSpread: sum.totalSpread + sample.totalSpread,
+      }), { shots: 0, hits: 0, headHits: 0, bodyHits: 0, legHits: 0, kills: 0, damageDealt: 0, totalSpread: 0 });
+      return { weaponId, sessions: samples.length, ...total };
+    }).filter((row) => row.sessions > 0);
+    const legacySessions = history.filter((item) => !item.weaponStats).length;
 
     return (
       <main className="tool-page">
@@ -2433,6 +2485,29 @@ function TrainingSetup({
               </article>
             );
           })}
+        </section>
+
+        <section className="growth-weapons panel">
+          <div className="growth-weapon-heading">
+            <div><p className="eyebrow">WEAPON PERFORMANCE</p><h2>무기별 성능</h2></div>
+            <span>발사 수 기준으로 합산한 명중률</span>
+          </div>
+          {weaponRows.length ? (
+            <div className="growth-weapon-scroll">
+              <div className="growth-weapon-row growth-weapon-labels"><b>무기</b><b>세션 · 발사</b><b>명중률</b><b>헤드 · 몸통 · 다리</b><b>제압 · 피해</b><b>평균 탄퍼짐</b></div>
+              {weaponRows.map((row) => (
+                <div className="growth-weapon-row" key={row.weaponId}>
+                  <b>{WEAPONS[row.weaponId].name}</b>
+                  <span>{row.sessions}회 · {row.shots}발</span>
+                  <strong>{(row.hits / row.shots * 100).toFixed(1)}%</strong>
+                  <span>{row.hits ? (row.headHits / row.hits * 100).toFixed(0) : 0}% · {row.hits ? (row.bodyHits / row.hits * 100).toFixed(0) : 0}% · {row.hits ? (row.legHits / row.hits * 100).toFixed(0) : 0}%</span>
+                  <span>{row.kills} · {row.damageDealt}</span>
+                  <span>{(row.totalSpread / row.shots).toFixed(2)}°</span>
+                </div>
+              ))}
+            </div>
+          ) : <div className="empty">무기별 분석은 이번 업데이트 이후 완료한 세션부터 쌓입니다.</div>}
+          {legacySessions > 0 && <p className="growth-legacy-note">기존 세션 {legacySessions}개는 무기별 발사 기록이 저장되지 않아 전체 세션 기록에만 포함됩니다.</p>}
         </section>
 
         <section className="growth-timeline panel">
@@ -2551,7 +2626,7 @@ function TrainingSetup({
     const [results, setResults] = useState<RunStats | null>(null);
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
-    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, headHits: stats.headHits, bodyHits: stats.bodyHits, legHits: stats.legHits, kills: stats.kills, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
+    const complete = (stats: RunStats) => { setResults(stats); const item: HistoryItem = { score: stats.score, accuracy: stats.accuracy, drill: stats.drill, hits: stats.hits, shots: stats.shots, streak: stats.streak, headHits: stats.headHits, bodyHits: stats.bodyHits, legHits: stats.legHits, kills: stats.kills, damageDealt: stats.damageDealt, movingShots: stats.movingShots, averageSpread: stats.averageSpread, weaponStats: stats.weaponStats, date: new Date().toLocaleDateString('ko-KR') }; const next = [item, ...history].slice(0, 50); setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
     if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); }} onEnterRange={() => setView('range')} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
     if (view === 'range') return <RangeScene {...config} mapId={mapId} onMapChange={setMapId} onConfigChange={setConfig} onLeave={() => setView('home')} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;

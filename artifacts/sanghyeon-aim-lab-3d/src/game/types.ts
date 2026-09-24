@@ -62,6 +62,18 @@ export type WeaponId =
   | 'ares'
   | 'odin';
 
+export type WeaponPerformance = {
+  shots: number;
+  hits: number;
+  headHits: number;
+  bodyHits: number;
+  legHits: number;
+  kills: number;
+  damageDealt: number;
+  movingShots: number;
+  totalSpread: number;
+};
+
 export type Keybinds = {
   forward: string;
   left: string;
@@ -100,6 +112,7 @@ export type RunStats = {
   damageDealt?: number;
   movingShots?: number;
   averageSpread?: number;
+  weaponStats?: Partial<Record<WeaponId, WeaponPerformance>>;
 };
 
 export type HistoryItem = {
@@ -114,4 +127,8 @@ export type HistoryItem = {
   bodyHits?: number;
   legHits?: number;
   kills?: number;
+  damageDealt?: number;
+  movingShots?: number;
+  averageSpread?: number;
+  weaponStats?: Partial<Record<WeaponId, WeaponPerformance>>;
 };
