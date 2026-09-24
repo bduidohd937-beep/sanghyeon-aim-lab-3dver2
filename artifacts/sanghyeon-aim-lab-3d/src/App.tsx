@@ -754,6 +754,7 @@ function TrainingSetup({
     const lastShotNdcRef = useRef(new THREE.Vector2(0, 0));
     const ammoRef = useRef<Partial<Record<WeaponId, number>>>({});
     const reloadUntilRef = useRef(0);
+    const pausedAtRef = useRef(0);
     const burstShotsRef = useRef(0);
     const nextShotAtRef = useRef(0);
     const reloadWeaponRef = useRef<WeaponId>(settings.weapon);
@@ -765,7 +766,7 @@ function TrainingSetup({
     const liveSettingsRef = useRef(settings);
     liveSettingsRef.current = settings;
     const audioContextRef = useRef<AudioContext | null>(null);
-    const playSound = useCallback((kind: 'shot' | 'hit' | 'error') => {
+    const playSound = useCallback((kind: 'shot' | 'hit' | 'error' | 'reload') => {
       const volume = liveSettingsRef.current.soundVolume;
       const AudioContextConstructor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (volume <= 0 || !AudioContextConstructor) return;
@@ -773,12 +774,12 @@ function TrainingSetup({
         const context = audioContextRef.current ?? (audioContextRef.current = new AudioContextConstructor());
         if (context.state === 'suspended') void context.resume();
         const now = context.currentTime;
-        const duration = kind === 'shot' ? .075 : .12;
+        const duration = kind === 'reload' ? .24 : kind === 'shot' ? .075 : .12;
         const oscillator = context.createOscillator();
         const gain = context.createGain();
         oscillator.type = kind === 'shot' ? 'sawtooth' : 'sine';
-        oscillator.frequency.setValueAtTime(kind === 'shot' ? 135 : kind === 'hit' ? 780 : 190, now);
-        oscillator.frequency.exponentialRampToValueAtTime(kind === 'shot' ? 48 : kind === 'hit' ? 1120 : 120, now + duration);
+        oscillator.frequency.setValueAtTime(kind === 'shot' ? 135 : kind === 'hit' ? 780 : kind === 'reload' ? 330 : 190, now);
+        oscillator.frequency.exponentialRampToValueAtTime(kind === 'shot' ? 48 : kind === 'hit' ? 1120 : kind === 'reload' ? 220 : 120, now + duration);
         gain.gain.setValueAtTime(.0001, now);
         gain.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * (kind === 'shot' ? .16 : .09)), now + .006);
         gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
@@ -828,13 +829,27 @@ function TrainingSetup({
       }, 1300 + Math.random() * 2700);
     }, []);
     useEffect(() => () => window.clearTimeout(reactionTimerRef.current), []);
-    const openTrainingTerminal = useCallback(() => {
-      terminalOpenRef.current = true;
+    const pauseSession = useCallback(() => {
+      if (statusRef.current === 'active') pausedAtRef.current = performance.now();
       statusRef.current = 'paused';
       setStatus('paused');
+    }, []);
+    const resumeSession = useCallback(() => {
+      if (statusRef.current !== 'paused') return;
+      if (pausedAtRef.current > 0) {
+        if (reloadUntilRef.current > 0) reloadUntilRef.current += performance.now() - pausedAtRef.current;
+        pausedAtRef.current = 0;
+      }
+      statusRef.current = 'active';
+      setStatus('active');
+      if (drill === 'reaction' && reactionType === 'color') beginReactionWait();
+    }, [beginReactionWait, drill, reactionType]);
+    const openTrainingTerminal = useCallback(() => {
+      terminalOpenRef.current = true;
+      pauseSession();
       setTerminalOpen(true);
       document.exitPointerLock?.();
-    }, []);
+    }, [pauseSession]);
     const launchTraining = () => {
       const nextConfig: TrainingConfig = {
         drill: terminalDrill,
@@ -864,6 +879,7 @@ function TrainingSetup({
       ammoRef.current = initialAmmo;
       setAmmoByWeapon(initialAmmo);
       reloadUntilRef.current = 0;
+      pausedAtRef.current = 0;
       setReloadUntil(0);
       setReloading(false);
       burstShotsRef.current = 0;
@@ -878,6 +894,7 @@ function TrainingSetup({
       pendingMicroCorrectionRef.current = false;
       window.clearTimeout(reactionTimerRef.current);
       statusRef.current = 'active';
+      pausedAtRef.current = 0;
       setStatus('active');
       setTerminalOpen(false);
       terminalOpenRef.current = false;
@@ -1323,6 +1340,7 @@ function TrainingSetup({
           reloadUntilRef.current = until;
           setReloadUntil(until);
           setReloading(true);
+          playSound('reload');
           fireHeldRef.current = false;
           return;
         }
@@ -1445,6 +1463,7 @@ function TrainingSetup({
             reloadUntilRef.current = until;
             setReloadUntil(until);
             setReloading(true);
+            playSound('reload');
           }
         }
 
@@ -1561,8 +1580,7 @@ function TrainingSetup({
           event.preventDefault();
           fireHeldRef.current = false;
           armoryReturnStatusRef.current = statusRef.current;
-          statusRef.current = 'paused';
-          setStatus('paused');
+          pauseSession();
           window.clearTimeout(reactionTimerRef.current);
           setArmoryOpen(true);
           armoryOpenRef.current = true;
@@ -1579,6 +1597,7 @@ function TrainingSetup({
             reloadUntilRef.current = until;
             setReloadUntil(until);
             setReloading(true);
+            playSound('reload');
             fireHeldRef.current = false;
           }
           return;
@@ -1592,15 +1611,12 @@ function TrainingSetup({
         if (event.code === binds.pause && hasStartedRef.current && !event.repeat) {
           event.preventDefault();
           if (statusRef.current === 'active') {
-            statusRef.current = 'paused';
-            setStatus('paused');
+            pauseSession();
             window.clearTimeout(reactionTimerRef.current);
             fireHeldRef.current = false;
             document.exitPointerLock?.();
           } else if (statusRef.current === 'paused' && !terminalOpenRef.current && !armoryOpenRef.current) {
-            statusRef.current = 'active';
-            setStatus('active');
-            if (drill === 'reaction' && reactionType === 'color') beginReactionWait();
+            resumeSession();
           }
           return;
         }
@@ -1888,7 +1904,7 @@ function TrainingSetup({
         renderer.dispose();
         if (renderer.domElement.parentElement === mount) mount.removeChild(renderer.domElement);
       };
-    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed, botBehavior, peekCueEnabled, damageModelEnabled, reactionType, beginReactionWait]);
+    }, [difficulty, drill, finish, difficultySize, flickBotCount, flickMode, mapId, openTrainingTerminal, terminalTargetSpeed, botBehavior, peekCueEnabled, damageModelEnabled, reactionType, beginReactionWait, pauseSession, resumeSession]);
 
     useEffect(() => {
       if (duration === 0) {
@@ -1907,9 +1923,11 @@ function TrainingSetup({
     const togglePause = () => {
       const next = statusRef.current === 'active' ? 'paused' : 'active';
       if (next === 'paused') setPointerLocked(false);
-      statusRef.current = next;
-      setStatus(next);
-      if (next === 'active' && drill === 'reaction' && reactionType === 'color') beginReactionWait();
+      if (next === 'paused') {
+        pauseSession();
+        window.clearTimeout(reactionTimerRef.current);
+        fireHeldRef.current = false;
+      } else resumeSession();
     };
     const exit = () => {
       pointerLockBlockedUntilRef.current = Date.now() + 1000;
@@ -1919,18 +1937,13 @@ function TrainingSetup({
       setTerminalOpen(false);
       terminalOpenRef.current = false;
       ammoSimulationRef.current = terminalAmmoSimulation;
-      if (hasStarted) {
-        statusRef.current = 'active';
-        setStatus('active');
-        if (drill === 'reaction' && reactionType === 'color') beginReactionWait();
-      }
+      if (hasStarted) resumeSession();
       };
     const closeArmory = () => {
       setArmoryOpen(false);
       armoryOpenRef.current = false;
-      statusRef.current = armoryReturnStatusRef.current;
-      setStatus(armoryReturnStatusRef.current);
-      if (armoryReturnStatusRef.current === 'active' && drill === 'reaction' && reactionType === 'color') beginReactionWait();
+      if (armoryReturnStatusRef.current === 'active') resumeSession();
+      else { statusRef.current = 'paused'; setStatus('paused'); }
     };
     const leaveTerminal = () => {
       if (hasStarted) closeTerminal();
@@ -1964,7 +1977,7 @@ function TrainingSetup({
               >
                 <Keyboard size={16} />
               </button>
-              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; statusRef.current = 'paused'; setStatus('paused'); window.clearTimeout(reactionTimerRef.current); setArmoryOpen(true); armoryOpenRef.current = true; document.exitPointerLock?.(); }} aria-label="무기고 열기" title={`무기고 · ${settings.keybinds.armory.replace('Key', '')}`}>{settings.keybinds.armory.replace('Key', '')}</button>
+              <button className="hud-button" onClick={() => { fireHeldRef.current = false; armoryReturnStatusRef.current = statusRef.current; pauseSession(); window.clearTimeout(reactionTimerRef.current); setArmoryOpen(true); armoryOpenRef.current = true; document.exitPointerLock?.(); }} aria-label="무기고 열기" title={`무기고 · ${settings.keybinds.armory.replace('Key', '')}`}>{settings.keybinds.armory.replace('Key', '')}</button>
               <button
                 className="hud-button"
                 onClick={() => setSettingsOpen(true)}
@@ -3045,7 +3058,7 @@ function TrainingSetup({
             <div className="settings-subsection telemetry-settings">
               <p className="eyebrow">SOUND</p>
               <strong>훈련 효과음</strong>
-              <label className="settings-inline">발사 / 명중 음량 <input type="range" min="0" max="1" step="0.05" value={settings.soundVolume} onChange={(e) => onChange({ ...settings, soundVolume: Number(e.target.value) })} /><output>{Math.round(settings.soundVolume * 100)}%{settings.soundVolume === 0 ? ' · 꺼짐' : ''}</output></label>
+              <label className="settings-inline">발사 / 명중 / 장전 음량 <input type="range" min="0" max="1" step="0.05" value={settings.soundVolume} onChange={(e) => onChange({ ...settings, soundVolume: Number(e.target.value) })} /><output>{Math.round(settings.soundVolume * 100)}%{settings.soundVolume === 0 ? ' · 꺼짐' : ''}</output></label>
               <p className="settings-note">효과음은 브라우저에서 생성되며 파일 다운로드나 온라인 API를 사용하지 않습니다.</p>
             </div>
             <div className="settings-subsection telemetry-settings">
