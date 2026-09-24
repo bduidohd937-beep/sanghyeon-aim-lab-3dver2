@@ -764,6 +764,33 @@ function TrainingSetup({
     const pendingMicroCorrectionRef = useRef(false);
     const liveSettingsRef = useRef(settings);
     liveSettingsRef.current = settings;
+    const audioContextRef = useRef<AudioContext | null>(null);
+    const playSound = useCallback((kind: 'shot' | 'hit' | 'error') => {
+      const volume = liveSettingsRef.current.soundVolume;
+      const AudioContextConstructor = window.AudioContext ?? (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (volume <= 0 || !AudioContextConstructor) return;
+      try {
+        const context = audioContextRef.current ?? (audioContextRef.current = new AudioContextConstructor());
+        if (context.state === 'suspended') void context.resume();
+        const now = context.currentTime;
+        const duration = kind === 'shot' ? .075 : .12;
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        oscillator.type = kind === 'shot' ? 'sawtooth' : 'sine';
+        oscillator.frequency.setValueAtTime(kind === 'shot' ? 135 : kind === 'hit' ? 780 : 190, now);
+        oscillator.frequency.exponentialRampToValueAtTime(kind === 'shot' ? 48 : kind === 'hit' ? 1120 : 120, now + duration);
+        gain.gain.setValueAtTime(.0001, now);
+        gain.gain.exponentialRampToValueAtTime(Math.max(.0001, volume * (kind === 'shot' ? .16 : .09)), now + .006);
+        gain.gain.exponentialRampToValueAtTime(.0001, now + duration);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start(now);
+        oscillator.stop(now + duration + .01);
+      } catch {
+        // Audio is optional; a blocked device must not interrupt a training run.
+      }
+    }, []);
+    useEffect(() => () => { void audioContextRef.current?.close(); audioContextRef.current = null; }, []);
     const [hasStarted, setHasStarted] = useState(false);
     const hasStartedRef = useRef(false);
     const ammoSimulationRef = useRef(false);
@@ -1247,6 +1274,7 @@ function TrainingSetup({
             const next = { ...statsRef.current, falseStarts: (statsRef.current.falseStarts ?? 0) + 1, score: Math.max(0, statsRef.current.score - 35) };
             statsRef.current = next;
             setStats({ ...next });
+            playSound('error');
             if (feedbackEnabled) setFeedback({ text: '파란색 신호가 뜨기 전에 눌렀습니다 · 재시작', miss: true, id: Date.now() });
             beginReactionWait();
             return;
@@ -1264,6 +1292,7 @@ function TrainingSetup({
           };
           statsRef.current = next;
           setStats({ ...next });
+          playSound('hit');
           if (feedbackEnabled) setFeedback({ text: `${reactionMs.toFixed(0)}ms · 유효 반응`, miss: false, id: Date.now() });
           beginReactionWait();
           return;
@@ -1298,6 +1327,7 @@ function TrainingSetup({
           return;
         }
         nextShotAtRef.current = now + minimumFireInterval;
+        playSound('shot');
         const movementSpeed = velocity.length();
         const stableForDrill = drill === 'braking'
           ? movementSpeed <= brakingStopThreshold
@@ -1380,6 +1410,7 @@ function TrainingSetup({
           }
           hitRoot.userData.reacted = true;
         }
+        if (hitObject) playSound('hit');
         const next = {
           ...statsRef.current,
           shots: statsRef.current.shots + 1,
@@ -2692,7 +2723,37 @@ function TrainingSetup({
         const parsed: unknown = JSON.parse(await file.text());
         const rows = Array.isArray(parsed) ? parsed : parsed && typeof parsed === 'object' && 'sessions' in parsed ? (parsed as { sessions: unknown }).sessions : null;
         if (!Array.isArray(rows)) throw new Error('기록 목록이 없습니다.');
-        const valid = rows.filter((row): row is HistoryItem => Boolean(row && typeof row === 'object' && typeof (row as HistoryItem).date === 'string' && typeof (row as HistoryItem).score === 'number' && typeof (row as HistoryItem).drill === 'string'));
+        const drillIds = new Set<Drill>(['flick', 'tracking', 'braking', 'reaction', 'micro', 'peek']);
+        const weaponIds = Object.keys(WEAPONS) as WeaponId[];
+        const optionalNumber = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+        const valid = rows.flatMap((row): HistoryItem[] => {
+          if (!row || typeof row !== 'object') return [];
+          const value = row as Record<string, unknown>;
+          if (typeof value.date !== 'string' || typeof value.score !== 'number' || !Number.isFinite(value.score) || typeof value.accuracy !== 'number' || !Number.isFinite(value.accuracy) || typeof value.drill !== 'string' || !drillIds.has(value.drill as Drill)) return [];
+          const weaponStats: Partial<Record<WeaponId, WeaponPerformance>> = {};
+          if (value.weaponStats && typeof value.weaponStats === 'object') {
+            for (const weaponId of weaponIds) {
+              const performance = (value.weaponStats as Record<string, unknown>)[weaponId];
+              if (!performance || typeof performance !== 'object') continue;
+              const item = performance as Record<string, unknown>;
+              const fields: (keyof WeaponPerformance)[] = ['shots', 'hits', 'headHits', 'bodyHits', 'legHits', 'kills', 'damageDealt', 'movingShots', 'totalSpread'];
+              if (fields.every((field) => typeof item[field] === 'number' && Number.isFinite(item[field]))) {
+                weaponStats[weaponId] = Object.fromEntries(fields.map((field) => [field, item[field]])) as unknown as WeaponPerformance;
+              }
+            }
+          }
+          const mapId = value.mapId === 'range' || value.mapId === 'corridor' || value.mapId === 'arena' ? value.mapId : undefined;
+          return [{
+            score: value.score, accuracy: value.accuracy, drill: value.drill as Drill, date: value.date, mapId,
+            difficulty: typeof value.difficulty === 'string' ? value.difficulty : undefined,
+            elapsedSeconds: optionalNumber(value.elapsedSeconds), hits: optionalNumber(value.hits), shots: optionalNumber(value.shots),
+            streak: optionalNumber(value.streak), headHits: optionalNumber(value.headHits), bodyHits: optionalNumber(value.bodyHits),
+            legHits: optionalNumber(value.legHits), kills: optionalNumber(value.kills), damageDealt: optionalNumber(value.damageDealt),
+            movingShots: optionalNumber(value.movingShots), averageSpread: optionalNumber(value.averageSpread), averageErrorPx: optionalNumber(value.averageErrorPx),
+            falseStarts: optionalNumber(value.falseStarts), correctionCount: optionalNumber(value.correctionCount), avgReaction: optionalNumber(value.avgReaction),
+            bestReaction: optionalNumber(value.bestReaction), weaponStats: Object.keys(weaponStats).length ? weaponStats : undefined,
+          }];
+        });
         if (!valid.length && rows.length) throw new Error('가져올 수 있는 기록이 없습니다.');
         onImportHistory(valid);
         setImportMessage(`${valid.length}개 기록을 추가했습니다.`);
@@ -2980,6 +3041,12 @@ function TrainingSetup({
                 ))}
               </div>
               <div className="keybind-footer"><button type="button" onClick={() => { onChange({ ...settings, keybinds: DEFAULT_KEYBINDS }); setCaptureKey(null); setKeybindMessage('기본 키로 복원했습니다.'); }}>기본 키로 초기화</button><p className="settings-note">{keybindMessage || '버튼을 누른 다음 지정할 키를 누르세요. 중복 키는 저장되지 않습니다.'}</p></div>
+            </div>
+            <div className="settings-subsection telemetry-settings">
+              <p className="eyebrow">SOUND</p>
+              <strong>훈련 효과음</strong>
+              <label className="settings-inline">발사 / 명중 음량 <input type="range" min="0" max="1" step="0.05" value={settings.soundVolume} onChange={(e) => onChange({ ...settings, soundVolume: Number(e.target.value) })} /><output>{Math.round(settings.soundVolume * 100)}%{settings.soundVolume === 0 ? ' · 꺼짐' : ''}</output></label>
+              <p className="settings-note">효과음은 브라우저에서 생성되며 파일 다운로드나 온라인 API를 사용하지 않습니다.</p>
             </div>
             <div className="settings-subsection telemetry-settings">
               <p className="eyebrow">RANGE TELEMETRY</p>

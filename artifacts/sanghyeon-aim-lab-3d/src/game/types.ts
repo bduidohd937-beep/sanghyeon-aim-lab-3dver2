@@ -95,6 +95,7 @@ export type Settings = {
   sensitivity: number;
   crosshair: CrosshairConfig;
   telemetryMode: TelemetryMode;
+  soundVolume: number;
   weapon: WeaponId;
   moveSpeed: number;
   keybinds: Keybinds;

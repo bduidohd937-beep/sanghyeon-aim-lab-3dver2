@@ -61,6 +61,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sensitivity: 1.15,
   crosshair: DEFAULT_CROSSHAIR,
   telemetryMode: 'off',
+  soundVolume: 0.25,
   weapon: 'vandal',
   moveSpeed: 4.5,
   keybinds: DEFAULT_KEYBINDS,
@@ -83,6 +84,7 @@ export function normalizeSettings(raw: unknown): Settings {
     sensitivity?: unknown;
     crosshair?: unknown;
     telemetryMode?: unknown;
+    soundVolume?: unknown;
     weapon?: unknown;
     moveSpeed?: unknown;
     keybinds?: unknown;
@@ -98,6 +100,9 @@ export function normalizeSettings(raw: unknown): Settings {
   const moveSpeed = typeof value.moveSpeed === 'number' && value.moveSpeed >= 1 && value.moveSpeed <= 10
     ? value.moveSpeed
     : DEFAULT_SETTINGS.moveSpeed;
+  const soundVolume = typeof value.soundVolume === 'number' && value.soundVolume >= 0 && value.soundVolume <= 1
+    ? value.soundVolume
+    : DEFAULT_SETTINGS.soundVolume;
   const keybinds = {
     ...DEFAULT_KEYBINDS,
     ...(value.keybinds && typeof value.keybinds === 'object' ? value.keybinds as Partial<Keybinds> : {}),
@@ -108,5 +113,5 @@ export function normalizeSettings(raw: unknown): Settings {
       ? { ...DEFAULT_CROSSHAIR, ...(value.crosshair as Partial<CrosshairConfig>) }
       : DEFAULT_CROSSHAIR;
 
-  return { sensitivity, crosshair, telemetryMode, weapon, moveSpeed, keybinds };
+  return { sensitivity, crosshair, telemetryMode, soundVolume, weapon, moveSpeed, keybinds };
 }
