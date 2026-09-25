@@ -296,174 +296,45 @@ function SettingsPanel({ settings, onChange, onClose }: { settings: Settings; on
 }
 
 function Home({
-  settings,
-  onSettings,
-  onStart,
   history,
   onNavigate,
-  onSettingsChange,
-  onSelectDrill,
   onEnterRange,
 }: {
-  settings: Settings;
-  onSettings: () => void;
-  onStart: (drill: Drill, duration: number, difficulty: string, feedbackEnabled?: boolean, aimCoach?: boolean, flickMode?: FlickMode, flickBotCount?: number) => void;
   history: HistoryItem[];
   onNavigate: (view: View) => void;
-  onSettingsChange: (next: Settings) => void;
-  onSelectDrill: (drill: Drill) => void;
   onEnterRange: () => void;
 }) {
-  const [drill, setDrill] = useState<Drill>('flick');
-
   const best = history.length
     ? Math.max(...history.map((item) => item.score))
     : 0;
-
   const lastAccuracy = history[0]?.accuracy ?? 0;
-
-  const updateCrosshair = (next: CrosshairConfig) => {
-    onSettingsChange({
-      ...settings,
-      crosshair: next,
-    });
-  };
-
-  const drillInfo = {
-    flick: { icon: '🎯', tag: '01', title: 'FLICK', korean: '정밀 전환', desc: '타겟이 나오면 바로 끌어가서 맞히는 기본 플릭 훈련.', active: true },
-    reaction: { icon: '⚡', tag: '04', title: '시각반응', korean: '반응속도', desc: '파란 신호 반응 또는 뒤돌아 나타난 봇을 조준하는 훈련.', active: true },
-    tracking: { icon: '◎', tag: '02', title: 'TRACKING', korean: '움직임 추적', desc: '움직이는 타겟을 놓치지 않고 따라가는 연습.', active: true },
-    braking: { icon: '↔', tag: '03', title: 'BRAKING', korean: '브레이킹', desc: 'A/D 반전으로 멈추고 바로 쏘는 감각을 잡는 훈련.', active: true },
-    micro: { icon: '✦', tag: '05', title: 'MICRO FLICK', korean: '미세 플릭', desc: '작은 타겟으로 짧고 정밀한 미세 조정을 연습.', active: true },
-    peek: { icon: '◁', tag: '06', title: 'PEEK', korean: '피킹 훈련', desc: '엄폐 뒤에서 예고 후 노출되는 봇을 빠르게 조준.', active: true },
-  };
-
   return (
     <div className="aim-app">
       <header className="app-header">
         <Brand />
-
-        <div className="header-meta">
-          <span>
-            <span
-              className="live-dot"
-              style={{ display: 'inline-block', marginRight: 8 }}
-            />
-            RANGE 01 / READY
-          </span>
-
-          <strong>
-            LV.{Math.max(1, Math.floor(history.length / 5) + 1)}
-          </strong>
-
-          <span className="header-ready">READY</span>
+        <div className="home-header-actions">
+          <span className="home-ready"><i /> 훈련실 준비</span>
+          <button onClick={() => onNavigate('growth')}>연습 기록</button>
+          <button onClick={() => onNavigate('crosshair')}>설정</button>
         </div>
       </header>
-
-      <div className="home-layout">
-        <main className="home-main">
-          <section className="home-hero">
-            <div className="eyebrow">
-              <span className="eyebrow-line" />
-              SANGHYEON AIM LAB // 3D RANGE
-            </div>
-
-            <h1 className="hero-title">
-              AIM TRAINING
-              <br />
-              <em>START HERE.</em>
-            </h1>
-
-            <p className="hero-copy">
-              훈련할 모드를 고르고 시설로 바로 들어가세요.
-              <br />
-              세션과 장비 설정은 시설 터미널에서 조정할 수 있습니다.
-            </p>
-            <button className="facility-entry-button" onClick={onEnterRange}>
-              훈련 시설 입장 <span>ENTER FACILITY ↗</span>
-            </button>
-          </section>
-
-          <section className="training-section">
-            <div className="section-title">
-              <div>
-                <p className="eyebrow">TRAINING MODULES</p>
-                <h2>훈련실</h2>
-              </div>
-
-              <span className="phase">6 ACTIVE MODULES</span>
-            </div>
-
-            <div className="drill-grid">
-              {(Object.keys(drillInfo) as Drill[]).filter((type) => drillInfo[type].active).map((type) => {
-                const item = drillInfo[type];
-                const selected = drill === type;
-
-                return (
-                  <button
-                    key={type}
-                    className={`drill-card ${selected ? 'selected' : ''} ${item.active ? '' : 'disabled'}`}
-                    onClick={() => { if (item.active) { setDrill(type); onSelectDrill(type); } }}
-                  >
-                    <div className="drill-card-top">
-                      <span className="drill-number">
-                        {item.tag}
-                      </span>
-
-                      <span className="drill-icon">
-                        {item.icon}
-                      </span>
-                    </div>
-
-                    <div className="drill-card-body">
-                      <span className="drill-name">
-                        {item.title}
-                      </span>
-
-                      <h3>{item.korean}</h3>
-
-                      <p>{item.desc}</p>
-                    </div>
-
-                    <div className="drill-card-bottom">
-                      <span>
-                        {selected ? 'SELECTED' : item.active ? 'SELECT' : 'PREPARING'}
-                      </span>
-
-                      <span>→</span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </section>
-        </main>
-
-        <aside className="home-quick-actions">
-          <div className="panel-kicker">
-            <span>LAB CONTROL</span>
-            <span>READY</span>
+      <main className="reboot-home">
+        <section className="reboot-home-panel">
+          <p className="reboot-home-kicker"><i /> SANGHYEON AIM LAB <span>// TRAINING FACILITY</span></p>
+          <h1>훈련실</h1>
+          <p className="reboot-home-copy">훈련실에 입장한 뒤 터미널에서 모드와 세션 조건을 선택하세요.</p>
+          <button className="reboot-entry-button" onClick={onEnterRange}>
+            <span><strong>훈련실 입장</strong><small>모드 · 맵 · 난이도 · 시간 설정</small></span>
+            <b aria-hidden="true">→</b>
+          </button>
+          <div className="reboot-home-stats">
+            <div><span>완료 세션</span><strong>{history.length}</strong></div>
+            <div><span>최고 점수</span><strong>{history.length ? best : '--'}</strong></div>
+            <div><span>최근 명중률</span><strong>{history.length ? `${lastAccuracy.toFixed(1)}%` : '--'}</strong></div>
           </div>
-          <h2 className="panel-title">훈련 도구</h2>
-          <div className="quick-action-grid">
-            <button onClick={() => onNavigate('sensitivity')}>
-              <span>01</span>
-              <div><strong>감도 설정</strong><small>VALORANT 감도 / eDPI</small></div>
-              <b>→</b>
-            </button>
-            <button onClick={() => onNavigate('growth')}>
-              <span>02</span>
-              <div><strong>연습 기록</strong><small>전체 세션과 성장 추이</small></div>
-              <b>→</b>
-            </button>
-            <button onClick={() => onNavigate('crosshair')}>
-              <span>03</span>
-              <div><strong>설정</strong><small>조준선 / 훈련 표시</small></div>
-              <b>→</b>
-            </button>
-          </div>
-        </aside>
-      </div>
+          <div className="reboot-home-footer"><span>W A S D</span><span>마우스 조준 / 클릭 발사</span><span>터미널에서 세션 준비</span></div>
+        </section>
+      </main>
     </div>
   );
 }
@@ -2208,27 +2079,13 @@ function TrainingSetup({
                 <div>
                   <span className="facility-terminal-kicker">SANGHYEON TRAINING FACILITY · CONTROL LINK 01</span>
                   <h1>훈련 터미널</h1>
-                  <p>공간을 선택하고 오늘의 훈련을 준비하세요.</p>
+                  <p>모드를 고른 뒤 구역과 세션 조건을 정하고 시작하세요.</p>
                 </div>
                 <button className="terminal-close" onClick={leaveTerminal} aria-label="터미널 닫기"><X size={19} /></button>
               </header>
 
-              <section className="terminal-section">
-                <div className="terminal-section-heading"><span>01</span><div><b>훈련 구역</b><small>이동을 누르면 선택한 구역으로 바로 이동합니다.</small></div></div>
-                <div className="terminal-map-grid">
-                  {TRAINING_MAPS.map((item, index) => (
-                    <article key={item.id} className={`terminal-map-card ${terminalMap === item.id ? 'selected' : ''}`}>
-                      <span className="terminal-map-index">0{index + 1} / {item.callout}</span>
-                      <strong>{item.name}</strong>
-                      <p>{item.description}</p>
-                      <button onClick={() => { setTerminalMap(item.id); onMapChange(item.id); }}>{terminalMap === item.id ? '현재 구역' : '구역 이동'}</button>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
               <section className="terminal-section terminal-training-options">
-                <div className="terminal-section-heading"><span>02</span><div><b>훈련 프로토콜</b><small>여섯 가지 독립 훈련 모드</small></div></div>
+                <div className="terminal-section-heading"><span>01</span><div><b>훈련 모드</b><small>오늘 연습할 조준 능력을 선택하세요.</small></div></div>
                 <div className="terminal-drill-row">
                   {([
                     ['flick', 'FLICK', '정밀 조준'],
@@ -2243,6 +2100,24 @@ function TrainingSetup({
                     </button>
                   ))}
                 </div>
+              </section>
+
+              <section className="terminal-section">
+                <div className="terminal-section-heading"><span>02</span><div><b>훈련 구역</b><small>선택한 모드를 진행할 구역을 고르세요.</small></div></div>
+                <div className="terminal-map-grid">
+                  {TRAINING_MAPS.map((item, index) => (
+                    <article key={item.id} className={`terminal-map-card ${terminalMap === item.id ? 'selected' : ''}`}>
+                      <span className="terminal-map-index">0{index + 1} / {item.callout}</span>
+                      <strong>{item.name}</strong>
+                      <p>{item.description}</p>
+                      <button onClick={() => { setTerminalMap(item.id); onMapChange(item.id); }}>{terminalMap === item.id ? '현재 구역' : '구역 이동'}</button>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="terminal-section terminal-training-options">
+                <div className="terminal-section-heading"><span>03</span><div><b>세션 조건</b><small>선택한 모드에 적용할 난이도와 규칙</small></div></div>
 
                 {terminalDrill === 'reaction' && (
                   <div className="terminal-setting-block reaction-type-setting">
@@ -2977,7 +2852,7 @@ function TrainingSetup({
     );
   }
 
-  function SettingsPage({ settings, onChange, onBack }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void }) {
+  function SettingsPage({ settings, onChange, onBack, onSensitivity }: { settings: Settings; onChange: (next: Settings) => void; onBack: () => void; onSensitivity: () => void }) {
     const [captureKey, setCaptureKey] = useState<keyof Keybinds | null>(null);
     const [keybindMessage, setKeybindMessage] = useState('');
     useEffect(() => {
@@ -3011,7 +2886,7 @@ function TrainingSetup({
             <p className="eyebrow">SETTINGS // GLOBAL</p>
             <h1>설정</h1>
           </div>
-          <div className="game-help">3D RANGE</div>
+          <button className="settings-sensitivity-link" onClick={onSensitivity}>감도 찾기 <span>→</span></button>
         </header>
         <section className="crosshair-config-shell panel">
           <div className="crosshair-big-preview"><CrosshairView config={settings.crosshair} /></div>
@@ -3093,12 +2968,12 @@ function TrainingSetup({
     useEffect(() => saveStorage('sanghyeon-settings', settings), [settings]);
     const start = (drill: Drill, duration: number, difficulty: string, feedbackEnabled = true, aimCoach = false, flickMode: FlickMode = 'random', flickBotCount = 3) => { setConfig({ drill, duration, difficulty, feedbackEnabled, aimCoach, flickBotCount, flickMode }); setView('range'); };
     const complete = (stats: RunStats) => { const scored = { ...stats, score: scoreTrainingRun(stats) }; setResults(scored); const item: HistoryItem = { score: scored.score, accuracy: scored.accuracy, drill: scored.drill, date: new Date().toLocaleDateString('ko-KR'), elapsedSeconds: scored.elapsedSeconds, difficulty: scored.difficulty, mapId: scored.mapId, hits: scored.hits, shots: scored.shots, streak: scored.streak, headHits: scored.headHits, bodyHits: scored.bodyHits, legHits: scored.legHits, kills: scored.kills, damageDealt: scored.damageDealt, movingShots: scored.movingShots, averageSpread: scored.averageSpread, averageErrorPx: scored.averageErrorPx, falseStarts: scored.falseStarts, correctionCount: scored.correctionCount, avgReaction: scored.avgReaction, bestReaction: scored.bestReaction, weaponStats: scored.weaponStats }; const next = [item, ...history]; setHistory(next); saveStorage('sanghyeon-history', next); setView('results'); };
-    if (view === 'home') return <Home settings={settings} onSettings={() => undefined} onStart={start} history={history} onNavigate={setView} onSettingsChange={setSettings} onSelectDrill={(drill) => { setConfig((current) => ({ ...current, drill })); }} onEnterRange={() => setView('range')} />;
+    if (view === 'home') return <Home history={history} onNavigate={setView} onEnterRange={() => setView('range')} />;
     if (view === 'setup') return <TrainingSetup drill={config.drill} onStart={start} onBack={() => setView('home')} />;
     if (view === 'range') return <RangeScene {...config} mapId={mapId} onMapChange={setMapId} onConfigChange={setConfig} onLeave={() => setView('home')} settings={settings} onSettingsChange={setSettings} onFinish={complete} />;
     if (view === 'sensitivity') return <SensitivityPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
     if (view === 'growth') return <GrowthPage history={history} onBack={() => setView('home')} onImportHistory={(items) => { const next = [...items, ...history]; setHistory(next); saveStorage('sanghyeon-history', next); }} />;
-    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} />;
+    if (view === 'crosshair') return <SettingsPage settings={settings} onChange={setSettings} onBack={() => setView('home')} onSensitivity={() => setView('sensitivity')} />;
     return results ? <Results stats={results} onAgain={() => setView('range')} onHome={() => setView('home')} /> : null;
   }
 
